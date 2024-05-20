@@ -1,7 +1,37 @@
 local Popup = require("nui.popup")
 local event = require("nui.utils.autocmd").event
 
-local function open_ui(handler)
+local M = {}
+
+local function update_lines(bufnr, lines)
+  vim.api.nvim_set_option_value("modifiable", true, { buf = bufnr })
+  vim.api.nvim_buf_set_lines(bufnr, 0, #lines, false, vim.tbl_map(function(i)
+    local new_line_char = string.find(i.lines, "\n")
+    if new_line_char == nil then
+      new_line_char = 0
+    end
+    return i.lines:sub(1, new_line_char - 1)
+  end, lines))
+  vim.api.nvim_set_option_value("modifiable", false, { buf = bufnr })
+end
+
+local function move(bufnr, lines, max_col, offset)
+  local row, col = unpack(vim.api.nvim_win_get_cursor(0))
+
+  if row == max_col then
+    return
+  end
+
+  local swap = lines[row + offset]
+  lines[row + offset] = lines[row]
+  lines[row] = swap
+
+  vim.api.nvim_win_set_cursor(0, { row + offset, col })
+
+  update_lines(bufnr, lines)
+end
+
+function M.open_ui(lines, handler)
   local popup = Popup({
     enter = true,
     focusable = true,
@@ -22,8 +52,6 @@ local function open_ui(handler)
   -- mount/open the component
   popup:mount()
 
-  local lines = { "Hello World", "Ad", "iaowejf" }
-
   -- unmount component when cursor leaves buffer
   popup:on(event.BufLeave, function()
     popup:unmount()
@@ -31,49 +59,18 @@ local function open_ui(handler)
   end)
 
   popup:map("n", "<S-j>", function(_)
-    local row, col = unpack(vim.api.nvim_win_get_cursor(0))
-
-    if row == #lines then
-      return
-    end
-
-    local swap = lines[row + 1]
-    lines[row + 1] = lines[row]
-    lines[row] = swap
-
-    vim.api.nvim_win_set_cursor(0, { row + 1, col })
-
-    vim.api.nvim_set_option_value("modifiable", true, { buf = popup.bufnr })
-    vim.api.nvim_buf_set_lines(popup.bufnr, 0, #lines, false, lines)
+    move(popup.bufnr, lines, #lines, 1)
   end, { noremap = true })
 
   popup:map("n", "<S-k>", function(_)
-    local row, col = unpack(vim.api.nvim_win_get_cursor(0))
-
-    if row == 1 then
-      return
-    end
-
-    local swap = lines[row - 1]
-    lines[row - 1] = lines[row]
-    lines[row] = swap
-
-    vim.api.nvim_win_set_cursor(0, { row - 1, col })
-
-    vim.api.nvim_set_option_value("modifiable", true, { buf = popup.bufnr })
-    vim.api.nvim_buf_set_lines(popup.bufnr, 0, #lines, false, lines)
+    move(popup.bufnr, lines, 1, -1)
   end, { noremap = true })
 
   popup:map("n", "q", function(_)
     vim.cmd [[q]]
   end, { noremap = true })
 
-  -- set content
-  vim.api.nvim_set_option_value("modifiable", true, { buf = popup.bufnr })
-  vim.api.nvim_buf_set_lines(popup.bufnr, 0, #lines, false, lines)
-  vim.api.nvim_set_option_value("modifiable", false, { buf = popup.bufnr })
+  update_lines(popup.bufnr, lines)
 end
 
-open_ui(function()
-
-end)
+return M

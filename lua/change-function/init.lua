@@ -3,6 +3,8 @@ local M = {}
 -- local locals = require("nvim-treesitter.locals")
 -- local ts_utils = require("nvim-treesitter.ts_utils")
 -- local uv = vim.loop
+--
+local ui = require("change-function.ui")
 
 local function make_position_param(win)
   local row, col = unpack(vim.api.nvim_win_get_cursor(win))
@@ -34,7 +36,7 @@ end
 --- Get the parameters/arguments from the function signature.
 --- @param node TSNode The node of the function signature
 --- @param bufnr integer The buffer number of the buffer where the node resides.
---- @return {}?
+--- @return table<any, any>?
 local function get_arguments(node, bufnr)
   local query_declare = vim.treesitter.query.get(vim.bo.filetype, "function_dec")
   local query_call = vim.treesitter.query.get(vim.bo.filetype, "function_call")
@@ -42,6 +44,15 @@ local function get_arguments(node, bufnr)
   if query_declare == nil or query_call == nil then
     vim.print("Queries are not available for this filetype")
     return
+  end
+
+  while query_call:iter_matches(node, bufnr, nil, nil, { all = true, max_start_depth = 0 })() == nil
+    and query_declare:iter_matches(node, bufnr, nil, nil, { all = true, max_start_depth = 0 })() == nil do
+    node = node:parent()
+    if node == nil then
+      vim.print("Node did not match")
+      return
+    end
   end
 
   local arguments = {}
@@ -80,7 +91,7 @@ local function get_arguments(node, bufnr)
   return arguments
 end
 
-local function get_text_edits(loc, oldIndex, newIndex)
+local function get_text_edits(loc, sorting)
   local query_declare = vim.treesitter.query.get(vim.bo.filetype, "function_dec")
   local query_call = vim.treesitter.query.get(vim.bo.filetype, "function_call")
 
@@ -99,15 +110,6 @@ local function get_text_edits(loc, oldIndex, newIndex)
     return
   end
 
-  while query_call:iter_matches(matched_node, bufnr, nil, nil, { all = true, max_start_depth = 0 })() == nil
-    and query_declare:iter_matches(matched_node, bufnr, nil, nil, { all = true, max_start_depth = 0 })() == nil do
-    matched_node = (matched_node:parent())
-    if matched_node == nil then
-      vim.print("Node did not match")
-      return
-    end
-  end
-
   vim.print(vim.treesitter.get_node_text((matched_node), bufnr, {}))
   local text_edits = get_arguments(matched_node, bufnr);
 
@@ -115,14 +117,16 @@ local function get_text_edits(loc, oldIndex, newIndex)
     return
   end
 
-  -- vim.print(textEdits)
-  local swap = text_edits[newIndex].newText;
-  text_edits[newIndex].newText = text_edits[oldIndex].newText;
-  text_edits[oldIndex].newText = swap;
+  local clone = vim.deepcopy(text_edits, true)
+  for i, v in ipairs(sorting) do
+    vim.print(clone[v.id])
+    text_edits[i].newText = clone[v.id].newText
+  end
+  vim.print(text_edits)
   return text_edits
 end
 
-local function handle_lsp_reference(results, old, new)
+local function handle_lsp_reference(results, sorting)
   local global_text_edits = {}
   for _, res in ipairs(results) do
     if res.error then
@@ -130,7 +134,7 @@ local function handle_lsp_reference(results, old, new)
       return
     end
     for _, loc in ipairs(res.result) do
-      local text_edits = get_text_edits(loc, old, new)
+      local text_edits = get_text_edits(loc, sorting)
       if text_edits ~= nil then
         for _, v in ipairs(text_edits) do
           if global_text_edits[vim.uri_to_bufnr(loc["uri"])] == nil then
@@ -142,7 +146,7 @@ local function handle_lsp_reference(results, old, new)
     end
   end
 
-  -- vim.print(textEdits)
+  vim.print(global_text_edits)
   for k, v in pairs(global_text_edits) do
     vim.lsp.util.apply_text_edits(v, k, 'UTF-8')
   end
@@ -152,19 +156,18 @@ local function lsp_buf_request(buf, method, params)
   vim.lsp.buf_request_all(buf, method, params, function(results)
     local curr_node = vim.treesitter.get_node()
     if curr_node ~= nil then
-      local node_text = vim.treesitter.get_node_text(curr_node, buf, {})
-      vim.ui.input({ prompt = "Swap index for " .. node_text },
-        function(i)
-          if i == nil then
-            return
-          end
-          vim.ui.input({ prompt = "New index for " .. node_text }, function(k)
-            if k == nil then
-              return
-            end
-            handle_lsp_reference(results, tonumber(i), tonumber(k))
-          end)
-        end)
+      local arguments = get_arguments(curr_node, buf);
+      if arguments == nil then
+        return
+      end
+      local index = 0
+      local lines = vim.tbl_map(function(i)
+        index = index + 1
+        return { lines = i.newText, id = index }
+      end, arguments)
+      ui.open_ui(lines, function ()
+        handle_lsp_reference(results, lines)
+      end)
     end
   end)
 end
