@@ -45,7 +45,7 @@ local function get_arguments(node, bufnr)
   end
 
   local arguments = {}
-  for _, match, _ in query_call:iter_matches(node, bufnr, nil, nil, { all = true, max_start_depth = 1 }) do
+  for _, match, _ in query_call:iter_matches(node, bufnr, nil, nil, { all = true, max_start_depth = 0 }) do
     for _, nodes in pairs(match) do
       for _, matched_node in ipairs(nodes) do
         -- local type = matched_node:type()
@@ -61,7 +61,7 @@ local function get_arguments(node, bufnr)
     end
   end
 
-  for _, match, _ in query_declare:iter_matches(node, bufnr, nil, nil, { all = true, max_start_depth = 1 }) do
+  for _, match, _ in query_declare:iter_matches(node, bufnr, nil, nil, { all = true, max_start_depth = 0 }) do
     for _, nodes in pairs(match) do
       for _, matched_node in ipairs(nodes) do
         -- local type = matched_node:type()
@@ -80,7 +80,7 @@ local function get_arguments(node, bufnr)
   return arguments
 end
 
-local function parse_query(loc, oldIndex, newIndex)
+local function get_text_edits(loc, oldIndex, newIndex)
   local query_declare = vim.treesitter.query.get(vim.bo.filetype, "function_dec")
   local query_call = vim.treesitter.query.get(vim.bo.filetype, "function_call")
 
@@ -99,8 +99,8 @@ local function parse_query(loc, oldIndex, newIndex)
     return
   end
 
-  while query_call:iter_matches(matched_node, bufnr, nil, nil, { all = true, max_start_depth = 1 })() == nil
-    and query_declare:iter_matches(matched_node, bufnr, nil, nil, { all = true, max_start_depth = 1 })() == nil do
+  while query_call:iter_matches(matched_node, bufnr, nil, nil, { all = true, max_start_depth = 0 })() == nil
+    and query_declare:iter_matches(matched_node, bufnr, nil, nil, { all = true, max_start_depth = 0 })() == nil do
     matched_node = (matched_node:parent())
     if matched_node == nil then
       vim.print("Node did not match")
@@ -108,28 +108,43 @@ local function parse_query(loc, oldIndex, newIndex)
     end
   end
 
-  local arguments = get_arguments(matched_node, bufnr);
+  vim.print(vim.treesitter.get_node_text((matched_node), bufnr, {}))
+  local text_edits = get_arguments(matched_node, bufnr);
 
-  if arguments == nil or #arguments < 2 then
+  if text_edits == nil or #text_edits < 2 then
     return
   end
 
-  vim.print(arguments)
-  local swap = arguments[newIndex].newText;
-  arguments[newIndex].newText = arguments[oldIndex].newText;
-  arguments[oldIndex].newText = swap;
-  vim.lsp.util.apply_text_edits(arguments, bufnr, "utf-8")
+  -- vim.print(textEdits)
+  local swap = text_edits[newIndex].newText;
+  text_edits[newIndex].newText = text_edits[oldIndex].newText;
+  text_edits[oldIndex].newText = swap;
+  return text_edits
 end
 
 local function handle_lsp_reference(results, old, new)
+  local global_text_edits = {}
   for _, res in ipairs(results) do
     if res.error then
       vim.print("An error occured: " .. res.error)
       return
     end
     for _, loc in ipairs(res.result) do
-      parse_query(loc, old, new)
+      local text_edits = get_text_edits(loc, old, new)
+      if text_edits ~= nil then
+        for _, v in ipairs(text_edits) do
+          if global_text_edits[vim.uri_to_bufnr(loc["uri"])] == nil then
+            global_text_edits[vim.uri_to_bufnr(loc["uri"])] = {}
+          end
+          table.insert(global_text_edits[vim.uri_to_bufnr(loc["uri"])], v)
+        end
+      end
     end
+  end
+
+  -- vim.print(textEdits)
+  for k, v in pairs(global_text_edits) do
+    vim.lsp.util.apply_text_edits(v, k, 'UTF-8')
   end
 end
 

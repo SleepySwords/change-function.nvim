@@ -29,3 +29,4 @@ vim.api.nvim_set_keymap("n", "<leader>cr", "", {
 - [ ] Make a nicer UI with nui
 - [ ] Find a better way than recursively calling parent to find the matched node (as this breaks when you try and use this on a value rather than a function).
 - [ ] Add more queries for different languages
+- [ ] One day maybe even the ability to add or remove function args (would probably have to be through specifying a seperator and using that to join arguments)
