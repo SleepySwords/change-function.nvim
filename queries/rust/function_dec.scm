@@ -1,5 +1,11 @@
 (function_item
     parameters: (parameters
-        (_) @param
+        (parameter) @param
+    )
+)
+
+(function_signature_item
+    parameters: (parameters
+        (parameter) @param
     )
 )
