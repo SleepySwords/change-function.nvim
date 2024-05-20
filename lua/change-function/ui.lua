@@ -31,12 +31,15 @@ local function move(bufnr, lines, max_col, offset)
   update_lines(bufnr, lines)
 end
 
-function M.open_ui(lines, handler)
+function M.open_ui(lines, node_name, handler)
   local popup = Popup({
     enter = true,
     focusable = true,
     border = {
       style = "rounded",
+      text = {
+        top = "Changing argument of " .. node_name,
+      }
     },
     position = "50%",
     size = {
@@ -55,7 +58,12 @@ function M.open_ui(lines, handler)
   -- unmount component when cursor leaves buffer
   popup:on(event.BufLeave, function()
     popup:unmount()
-    handler(lines)
+    vim.ui.select({ "Confirm", "Cancel" }, { prompt = "Are you sure?" }, function(i)
+      if i == "Cancel" then
+        return
+      end
+      handler(lines)
+    end)
   end)
 
   popup:map("n", "<S-j>", function(_)
@@ -67,6 +75,10 @@ function M.open_ui(lines, handler)
   end, { noremap = true })
 
   popup:map("n", "q", function(_)
+    vim.cmd [[q]]
+  end, { noremap = true })
+
+  popup:map("n", "<enter>", function(_)
     vim.cmd [[q]]
   end, { noremap = true })
 

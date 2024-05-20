@@ -59,10 +59,6 @@ local function get_arguments(node, bufnr)
   for _, match, _ in query_call:iter_matches(node, bufnr, nil, nil, { all = true, max_start_depth = 0 }) do
     for _, nodes in pairs(match) do
       for _, matched_node in ipairs(nodes) do
-        -- local type = matched_node:type()
-        -- local row1, col1, row2, col2 = matched_node:range()
-        -- vim.print({ type, row1, row2, col1, col2 })
-        -- vim.print(range, text)
         local range, text = get_range_text(matched_node, bufnr);
         table.insert(arguments, {
           range = range,
@@ -75,10 +71,6 @@ local function get_arguments(node, bufnr)
   for _, match, _ in query_declare:iter_matches(node, bufnr, nil, nil, { all = true, max_start_depth = 0 }) do
     for _, nodes in pairs(match) do
       for _, matched_node in ipairs(nodes) do
-        -- local type = matched_node:type()
-        -- local row1, col1, row2, col2 = matched_node:range()
-        -- vim.print({ type, row1, row2, col1, col2 })
-        -- vim.print(range, text)
         local range, text = get_range_text(matched_node, bufnr);
         table.insert(arguments, {
           range = range,
@@ -104,25 +96,20 @@ local function get_text_edits(loc, sorting)
   vim.fn.bufload(bufnr)
 
   local pos = { loc["range"]["start"]["line"], loc["range"]["start"]["character"] }
-  local matched_node = (vim.treesitter.get_node({ pos = pos, bufnr = bufnr, lang = vim.bo.filetype }):parent())
+  local matched_node = vim.treesitter.get_node({ pos = pos, bufnr = bufnr, lang = vim.bo.filetype }):parent()
   if matched_node == nil then
     vim.print("Node did not match")
     return
   end
 
-  vim.print(vim.treesitter.get_node_text((matched_node), bufnr, {}))
   local text_edits = get_arguments(matched_node, bufnr);
-
-  if text_edits == nil or #text_edits < 2 then
+  if text_edits == nil then
     return
   end
-
   local clone = vim.deepcopy(text_edits, true)
   for i, v in ipairs(sorting) do
-    vim.print(clone[v.id])
     text_edits[i].newText = clone[v.id].newText
   end
-  vim.print(text_edits)
   return text_edits
 end
 
@@ -165,7 +152,7 @@ local function lsp_buf_request(buf, method, params)
         index = index + 1
         return { lines = i.newText, id = index }
       end, arguments)
-      ui.open_ui(lines, function ()
+      ui.open_ui(lines, vim.treesitter.get_node_text(curr_node, buf, {}), function()
         handle_lsp_reference(results, lines)
       end)
     end
