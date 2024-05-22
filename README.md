@@ -1,6 +1,8 @@
 # change-function.nvim
 What happens when you combine treesitter and lsp together.
 
+![output](https://github.com/SleepySwords/change-function.nvim/assets/33922797/e9f0f78c-af8f-488f-99e4-50494b6a8cf0)
+
 ## Purpose
 
 change-function.nvim allows you to swap function arguments or parameters and have it be updated for all references across a particular project.
