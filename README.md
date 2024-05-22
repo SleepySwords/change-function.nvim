@@ -1,7 +1,7 @@
 # change-function.nvim
 What happens when you combine treesitter and lsp together.
 
-![output](https://github.com/SleepySwords/change-function.nvim/assets/33922797/e9f0f78c-af8f-488f-99e4-50494b6a8cf0)
+![output](https://github.com/SleepySwords/change-function.nvim/assets/33922797/540489a7-958b-455c-8a0c-c974a8d05e98)
 
 ## Purpose
 
