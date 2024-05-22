@@ -31,55 +31,43 @@ local function move(bufnr, lines, max_col, offset)
   update_lines(bufnr, lines)
 end
 
-function M.open_ui(lines, node_name, handler)
-  local popup = Popup({
-    enter = true,
-    focusable = true,
-    border = {
-      style = "rounded",
-      text = {
-        top = "Changing argument of " .. node_name,
-      }
-    },
-    position = "50%",
-    size = {
-      width = "40%",
-      height = "20%",
-    },
-    buf_options = {
-      modifiable = false,
-      readonly = false,
-    },
-  })
+function M.set_config(config_manager)
+  M.config = config_manager.config
+end
 
-  -- mount/open the component
+function M.open_ui(lines, node_name, handler)
+  local popup = Popup(M.config.nui(node_name))
+
   popup:mount()
 
-  -- unmount component when cursor leaves buffer
   popup:on(event.BufLeave, function()
     popup:unmount()
+  end)
+
+  popup:map("n", M.config.mappings.move_down, function(_)
+    move(popup.bufnr, lines, #lines, 1)
+  end, { noremap = true })
+
+  popup:map("n", M.config.mappings.move_up, function(_)
+    move(popup.bufnr, lines, 1, -1)
+  end, { noremap = true })
+
+  popup:map("n", M.config.mappings.quit, function(_)
+    vim.cmd [[q]]
+  end, { noremap = true })
+
+  popup:map("n", M.config.mappings.quit2, function(_)
+    vim.cmd [[q]]
+  end, { noremap = true })
+
+  popup:map("n", M.config.mappings.confirm, function(_)
+    vim.cmd [[q]]
     vim.ui.select({ "Confirm", "Cancel" }, { prompt = "Are you sure?" }, function(i)
       if i == "Cancel" then
         return
       end
       handler(lines)
     end)
-  end)
-
-  popup:map("n", "<S-j>", function(_)
-    move(popup.bufnr, lines, #lines, 1)
-  end, { noremap = true })
-
-  popup:map("n", "<S-k>", function(_)
-    move(popup.bufnr, lines, 1, -1)
-  end, { noremap = true })
-
-  popup:map("n", "q", function(_)
-    vim.cmd [[q]]
-  end, { noremap = true })
-
-  popup:map("n", "<enter>", function(_)
-    vim.cmd [[q]]
   end, { noremap = true })
 
   update_lines(popup.bufnr, lines)

@@ -1,3 +1,9 @@
+(call_expression
+    arguments: (arguments
+        (_) @arg
+    )
+)
+
 (function_item
     parameters: (parameters
         (parameter) @param
