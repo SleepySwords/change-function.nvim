@@ -1,4 +1,8 @@
 local defaults = {
+  queries = {
+    rust = "function_params"
+  },
+
   nui = function(node_name)
     return {
       enter = true,

@@ -13,7 +13,9 @@ Use your favourite package manager to install `change-function.nvim`
 {
     'SleepySwords/change-function.nvim',
     dependencies = {
-      'MunifTanjim/nui.nvim'
+      'MunifTanjim/nui.nvim',
+      'nvim-treesitter/nvim-treesitter',
+      'nvim-treesitter/nvim-treesitter-textobjects', -- Not required, however provides fallback `textobjects.scm`
     }
 }
 ```
@@ -48,6 +50,10 @@ change_function.setup({
     }
   end,
 
+  queries = {
+    rust = "function_params",
+  }
+
   mappings = {
     quit = 'q',
     quit2 = '<esc>',
@@ -64,15 +70,15 @@ vim.api.nvim_set_keymap('n', '<leader>cr', '', {
 
 ## Writing queries for different languages
 
-`change-function.nvim` uses treesitter to find the location of argument and function parameters in order to swap them. Writing these queries to match the argument is fortunately quite simple.
+`change-function.nvim` uses treesitter to find the location of argument and function parameters in order to swap them. By default, `change-function.nvim` uses the `textobjects.scm` queries as a way to find the parameters. However, sometimes these queries are not suitable. Writing alternative queries to match the argument is fortunately quite simple.
 
-The queries used are inside the `function_args_params.scm` files and are individual to each language. These files are stored in the runtime `queries` directory, so local configurations are also able to add or override them.
+The queries used are specified in the config for each filetype, typically they are named `function_params.scm` files and are individual to each language. These files are stored in the runtime `queries` directory, so local configurations are also able to add or override them.
 
-Using the `:InspectTree` command, observe how treesitter interperts the syntax tree. The items we want to find are the function declaration/call itself and the arguments within the function declaration/call.
+Using the `:InspectTree` command, observe how treesitter interprets the syntax tree. The items we want to find are the function declaration/call itself and the arguments within the function declaration/call.
 
 Usually, they would have a similar name to `function_item` or `call_expression`.
 
-We want to match the individual arguments from the query so they can be used. Usually, the multiple arguments are within the `arguments`/`parameters` field of the function declaration or call expression. To capture the individual arguments we want to append a capture, such as `@arg`, to the end of the query. As some parsers may use the expressions themselves (like: `binary_expression`), a placeholder value `(_)` could be used.
+We want to match the individual arguments from the query so they can be used. Usually, the multiple arguments are within the `arguments`/`parameters` field of the function declaration or call expression. To capture the individual arguments we want to append a capture called `parameter.inner` (ie: `@parameter.inner`), to the end of the query. As some parsers may use the expressions themselves (like: `binary_expression`), a placeholder value `(_)` could be used.
 
 Ensure, you place both a function declaration and a call expression if your language supports it to update references across your project.
 
@@ -81,20 +87,20 @@ Putting this together for Rust
 ; Matches the call arguments
 (call_expression
     arguments: (arguments
-        (_) @arg
+        (_) @parameter.inner
     )
 )
 
 ; Matches function declarations
 (function_item
     parameters: (parameters
-        (parameter) @param
+        (parameter) @parameter.inner
     )
 )
 
 (function_signature_item
     parameters: (parameters
-        (parameter) @param
+        (parameter) @parameter.inner
     )
 )
 ```

@@ -1,9 +1,22 @@
+--- @class TextRange
+--- @field start {line: integer, character: integer}
+--- @field end {line: integer, character: integer}
+
+--- @class Text
+--- @field text string
+--- @field range Range
+
 local ui = require("change-function.ui")
 local config_manager = require("change-function.config")
 local api = vim.api
-local treesitter = vim.treesitter
+local ts = vim.treesitter
 
 local M = {}
+
+local function get_queries()
+  return ts.query.get(vim.bo.filetype,
+    config_manager.config.queries[vim.bo.filetype] or "textobjects")
+end
 
 local function make_position_param(win)
   local row, col = unpack(api.nvim_win_get_cursor(win))
@@ -11,9 +24,9 @@ local function make_position_param(win)
   return { line = row, character = col }
 end
 
---- get_range_text
+--- Get the text and the range of a ndoe.
 --- @param node TSNode
---- @return {}, string
+--- @return TextRange, string
 local function get_range_text(node, bufnr)
   local row1, col1, row2, col2 = node:range();
   local range = {
@@ -26,24 +39,24 @@ local function get_range_text(node, bufnr)
       character = col2,
     }
   }
-  local text = (api.nvim_buf_get_text(bufnr, row1, col1, row2, col2, {}));
-  local newText = table.concat(text, "\n");
-  return range, newText
+  local buf_text = (api.nvim_buf_get_text(bufnr, row1, col1, row2, col2, {}));
+  local text = table.concat(buf_text, "\n");
+  return range, text
 end
 
 --- Get the parameters/arguments from the function signature.
 --- @param node TSNode The node of the function signature
 --- @param bufnr integer The buffer number of the buffer where the node resides.
---- @return table<any, any>?
+--- @return table<any, Text>?
 local function get_arguments(node, bufnr)
-  local query_function = treesitter.query.get(vim.bo.filetype, "function_args_params")
+  local query_function = get_queries()
 
   if query_function == nil then
     vim.print("Queries are not available for this filetype")
     return
   end
 
-  while query_function:iter_matches(node, bufnr, nil, nil, { all = true, max_start_depth = 0 })() == nil do
+  while query_function:iter_matches(node, bufnr, nil, nil, { all = true, max_start_depth = 1 })() == nil do
     node = node:parent()
     if node == nil then
       vim.print("Node did not match")
@@ -52,46 +65,72 @@ local function get_arguments(node, bufnr)
   end
 
   local arguments = {}
-  for _, match, _ in query_function:iter_matches(node, bufnr, nil, nil, { all = true, max_start_depth = 0 }) do
-    for _, nodes in pairs(match) do
+  local ignore = {}
+  for _, match, _ in query_function:iter_matches(node, bufnr, nil, nil, { all = true, max_start_depth = 1 }) do
+    for id, nodes in pairs(match) do
+      local name = query_function.captures[id]
+      vim.print(name);
       for _, matched_node in ipairs(nodes) do
         local range, text = get_range_text(matched_node, bufnr);
-        table.insert(arguments, {
-          range = range,
-          newText = text
-        })
+        if name == "parameter.inner" then
+          table.insert(arguments, {
+            range = range,
+            text = text
+          })
+        end
+        if name == "parameter.inner.ignore" then
+          table.insert(ignore, range)
+        end
       end
     end
+  end
+
+  for _, v in ipairs(ignore) do
+    vim.print(v);
+    arguments = vim.tbl_filter(function(i)
+      return not vim.deep_equal(i.range, v)
+    end, arguments)
   end
 
   return arguments
 end
 
---- Get the text edits that need to be done
-local function get_text_edits(loc, sorting)
+--- Get the text edits that need to be done to change an argument
+--- @param loc {} location of where the change should be done
+--- @param changes {} The swaps that are required to change
+--- @return {}?
+local function get_text_edits(loc, changes)
   local bufnr = vim.uri_to_bufnr(loc["uri"])
   vim.fn.bufload(bufnr)
 
   local pos = { loc["range"]["start"]["line"], loc["range"]["start"]["character"] }
-  local matched_node = treesitter.get_node({ pos = pos, bufnr = bufnr, lang = vim.bo.filetype }):parent()
+  local matched_node = ts.get_node({ pos = pos, bufnr = bufnr, lang = vim.bo.filetype }):parent()
   if matched_node == nil then
     vim.print("Node did not match")
     return
   end
 
-  local text_edits = get_arguments(matched_node, bufnr);
-  if text_edits == nil then
+  local args = get_arguments(matched_node, bufnr);
+  if args == nil then
     return
   end
-  local clone = vim.deepcopy(text_edits, true)
-  for i, v in ipairs(sorting) do
-    text_edits[i].newText = clone[v.id].newText
+
+  local text_edits = {}
+  for i, v in ipairs(changes) do
+    if #args < v.id then
+      vim.print("Failed to swap, no such argument in reference")
+      return
+    end
+    table.insert(text_edits, {
+      newText = args[v.id].text,
+      range = args[i].range,
+    });
   end
   return text_edits
 end
 
 --- Handles the lsp results and apply text edits
-local function handle_lsp_reference_result(results, sorting)
+local function handle_lsp_reference_result(results, changes)
   local global_text_edits = {}
   for _, res in ipairs(results) do
     if res.error then
@@ -99,14 +138,15 @@ local function handle_lsp_reference_result(results, sorting)
       return
     end
     for _, loc in ipairs(res.result) do
-      local text_edits = get_text_edits(loc, sorting)
-      if text_edits ~= nil then
-        for _, v in ipairs(text_edits) do
-          if global_text_edits[vim.uri_to_bufnr(loc["uri"])] == nil then
-            global_text_edits[vim.uri_to_bufnr(loc["uri"])] = {}
-          end
-          table.insert(global_text_edits[vim.uri_to_bufnr(loc["uri"])], v)
+      local text_edits = get_text_edits(loc, changes)
+      if text_edits == nil then
+        return
+      end
+      for _, v in ipairs(text_edits) do
+        if global_text_edits[vim.uri_to_bufnr(loc["uri"])] == nil then
+          global_text_edits[vim.uri_to_bufnr(loc["uri"])] = {}
         end
+        table.insert(global_text_edits[vim.uri_to_bufnr(loc["uri"])], v)
       end
     end
   end
@@ -116,8 +156,8 @@ local function handle_lsp_reference_result(results, sorting)
   end
 end
 
-local function lsp_buf_request(buf, method, params)
-  local query_function = treesitter.query.get(vim.bo.filetype, "function_args_params")
+local function make_lsp_request(buf, method, params)
+  local query_function = get_queries()
 
   if query_function == nil then
     vim.print("Queries are not available for this filetype")
@@ -125,19 +165,29 @@ local function lsp_buf_request(buf, method, params)
   end
 
   vim.lsp.buf_request_all(buf, method, params, function(results)
-    local curr_node = treesitter.get_node()
+    local curr_node = ts.get_node()
+
     if curr_node ~= nil then
       local arguments = get_arguments(curr_node, buf);
       if arguments == nil then
         return
       end
+
       local index = 0
       local lines = vim.tbl_map(function(i)
         index = index + 1
-        return { lines = i.newText, id = index }
-      end, arguments)
-      ui.open_ui(lines, treesitter.get_node_text(curr_node, buf, {}), function()
-        handle_lsp_reference_result(results, lines)
+        return { line = i.text, id = index }
+      end, arguments);
+
+      ui.open_ui(lines, ts.get_node_text(curr_node, buf, {}), function()
+        local filtered_changes = {};
+        for i,v in ipairs(lines) do
+          if i ~= v.id then
+            filtered_changes[#filtered_changes+1] = v
+          end
+          vim.print(filtered_changes)
+        end
+        handle_lsp_reference_result(results, filtered_changes)
       end)
     end
   end)
@@ -152,7 +202,7 @@ function M.change_function()
   }
   params.context = { includeDeclaration = true }
 
-  lsp_buf_request(api.nvim_get_current_buf(), method, params)
+  make_lsp_request(api.nvim_get_current_buf(), method, params)
 end
 
 function M.setup(opts)

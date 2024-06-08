@@ -6,11 +6,11 @@ local M = {}
 local function update_lines(bufnr, lines)
   vim.api.nvim_set_option_value("modifiable", true, { buf = bufnr })
   vim.api.nvim_buf_set_lines(bufnr, 0, #lines, false, vim.tbl_map(function(i)
-    local new_line_char = string.find(i.lines, "\n")
+    local new_line_char = string.find(i.line, "\n")
     if new_line_char == nil then
       new_line_char = 0
     end
-    return i.lines:sub(1, new_line_char - 1)
+    return i.line:sub(1, new_line_char - 1)
   end, lines))
   vim.api.nvim_set_option_value("modifiable", false, { buf = bufnr })
 end
