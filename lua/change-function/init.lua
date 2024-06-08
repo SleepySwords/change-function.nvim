@@ -69,7 +69,6 @@ local function get_arguments(node, bufnr)
   for _, match, _ in query_function:iter_matches(node, bufnr, nil, nil, { all = true, max_start_depth = 1 }) do
     for id, nodes in pairs(match) do
       local name = query_function.captures[id]
-      vim.print(name);
       for _, matched_node in ipairs(nodes) do
         local range, text = get_range_text(matched_node, bufnr);
         if name == "parameter.inner" then
@@ -86,7 +85,6 @@ local function get_arguments(node, bufnr)
   end
 
   for _, v in ipairs(ignore) do
-    vim.print(v);
     arguments = vim.tbl_filter(function(i)
       return not vim.deep_equal(i.range, v)
     end, arguments)
@@ -185,7 +183,6 @@ local function make_lsp_request(buf, method, params)
           if i ~= v.id then
             filtered_changes[#filtered_changes+1] = v
           end
-          vim.print(filtered_changes)
         end
         handle_lsp_reference_result(results, filtered_changes)
       end)
