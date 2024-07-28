@@ -83,11 +83,6 @@ local function get_arguments(node, bufnr, cursor)
           vim.print("Cursor is not on top of a method")
           return
         end
-        vim.print("in range: ")
-        vim.print(range)
-        vim.print(vim.api.nvim_win_get_cursor(0))
-        vim.print(text)
-        vim.print(name)
         if name == "parameter.inner" then
           table.insert(arguments, {
             range = range,
@@ -165,7 +160,6 @@ local function handle_lsp_reference_result(results, changes)
       end
     end
   end
-  vim.print(global_text_edits)
 
   for k, v in pairs(global_text_edits) do
     vim.lsp.util.apply_text_edits(v, k, 'UTF-8')
