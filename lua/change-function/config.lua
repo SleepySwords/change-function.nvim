@@ -1,6 +1,6 @@
 local defaults = {
   queries = {
-    rust = "function_params"
+    rust = "function_params",
   },
 
   nui = function(node_name)
@@ -11,7 +11,7 @@ local defaults = {
         style = "rounded",
         text = {
           top = "Changing argument of " .. node_name,
-        }
+        },
       },
       position = "50%",
       size = {
@@ -26,18 +26,17 @@ local defaults = {
   end,
 
   mappings = {
-    quit = 'q',
-    quit2 = '<esc>',
-    move_down = '<S-j>',
-    move_up = '<S-k>',
-    confirm = '<enter>',
-  }
+    quit = "q",
+    quit2 = "<esc>",
+    move_down = "<S-j>",
+    move_up = "<S-k>",
+    confirm = "<enter>",
+  },
 }
 local config = {}
 
-
 function config.set_default(user_defaults)
-  config.config = vim.tbl_deep_extend('keep', user_defaults, defaults)
+  config.config = vim.tbl_deep_extend("keep", user_defaults, defaults)
 end
 
 config.set_default({})
