@@ -11,9 +11,6 @@
     )
 )
 
-; (call_expression
-;   (field_expression) @method)
-
 (call_expression
   function: (field_expression
     field: (field_identifier) @method

@@ -14,8 +14,7 @@ local ts = vim.treesitter
 local M = {}
 
 local function get_queries()
-  return ts.query.get(vim.bo.filetype,
-    config_manager.config.queries[vim.bo.filetype] or "textobjects")
+  return ts.query.get(vim.bo.filetype, config_manager.config.queries[vim.bo.filetype] or "textobjects")
 end
 
 local function make_position_param(win)
@@ -28,7 +27,7 @@ end
 --- @param node TSNode
 --- @return TextRange, string
 local function get_range_text(node, bufnr)
-  local row1, col1, row2, col2 = node:range();
+  local row1, col1, row2, col2 = node:range()
   local range = {
     start = {
       line = row1,
@@ -37,16 +36,18 @@ local function get_range_text(node, bufnr)
     ["end"] = {
       line = row2,
       character = col2,
-    }
+    },
   }
-  local buf_text = (api.nvim_buf_get_text(bufnr, row1, col1, row2, col2, {}));
-  local text = table.concat(buf_text, "\n");
+  local buf_text = (api.nvim_buf_get_text(bufnr, row1, col1, row2, col2, {}))
+  local text = table.concat(buf_text, "\n")
   return range, text
 end
 
 local function in_range(range, pos)
-  return range.start.line <= pos[1] and pos[1] <= range["end"].line and
-      range.start.character <= pos[2] and pos[2] <= range["end"].character
+  return range.start.line <= pos[1]
+    and pos[1] <= range["end"].line
+    and range.start.character <= pos[2]
+    and pos[2] <= range["end"].character
 end
 
 --- Get the parameters/arguments from the function signature.
@@ -76,17 +77,18 @@ local function get_arguments(node, bufnr, cursor)
     for id, nodes in pairs(match) do
       local name = query_function.captures[id]
       for _, matched_node in ipairs(nodes) do
-        local range, text = get_range_text(matched_node, bufnr);
-        if (name == "function" or name == "method") and
-            not in_range(range, cursor)
+        local range, text = get_range_text(matched_node, bufnr)
+        if
+          (name == "function" or name == "method" or name == "function_declaration" or name == "method_declaration")
+          and not in_range(range, cursor)
         then
           vim.print("Cursor is not on top of a method")
           return
         end
-        if name == "parameter.inner" then
+        if name == "parameter.inner" or name == "argument.inner" then
           table.insert(arguments, {
             range = range,
-            text = text
+            text = text,
           })
         end
         if name == "parameter.inner.ignore" then
@@ -120,7 +122,7 @@ local function get_text_edits(loc, changes)
     return
   end
 
-  local args = get_arguments(matched_node, bufnr, pos);
+  local args = get_arguments(matched_node, bufnr, pos)
   if args == nil then
     return
   end
@@ -134,7 +136,7 @@ local function get_text_edits(loc, changes)
     table.insert(text_edits, {
       newText = args[v.id].text,
       range = args[i].range,
-    });
+    })
   end
   return text_edits
 end
@@ -160,9 +162,10 @@ local function handle_lsp_reference_result(results, changes)
       end
     end
   end
+  vim.print(global_text_edits)
 
   for k, v in pairs(global_text_edits) do
-    vim.lsp.util.apply_text_edits(v, k, 'UTF-8')
+    vim.lsp.util.apply_text_edits(v, k, "UTF-8")
   end
 end
 
@@ -178,8 +181,10 @@ local function make_lsp_request(buf, method, params)
     local curr_node = ts.get_node()
 
     if curr_node ~= nil then
-      local arguments = get_arguments(curr_node, buf,
-        { vim.api.nvim_win_get_cursor(0)[1] - 1, vim.api.nvim_win_get_cursor(0)[2] });
+      local arguments = get_arguments(curr_node, buf, {
+        vim.api.nvim_win_get_cursor(0)[1] - 1,
+        vim.api.nvim_win_get_cursor(0)[2],
+      })
       if arguments == nil then
         return
       end
@@ -188,10 +193,10 @@ local function make_lsp_request(buf, method, params)
       local lines = vim.tbl_map(function(i)
         index = index + 1
         return { line = i.text, id = index }
-      end, arguments);
+      end, arguments)
 
       ui.open_ui(lines, ts.get_node_text(curr_node, buf, {}), function()
-        local filtered_changes = {};
+        local filtered_changes = {}
         for i, v in ipairs(lines) do
           if i ~= v.id then
             filtered_changes[#filtered_changes + 1] = v
