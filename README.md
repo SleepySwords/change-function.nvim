@@ -97,6 +97,8 @@ call/declaration and seeing where it lands on the tree.
 
 Usually, they would have a similar name to `function_item` or `call_expression`.
 
+<img width="921" alt="Untitled" src="https://github.com/user-attachments/assets/5dcf0e73-64d7-41f9-99ea-a5d21f6d2559">
+
 ### 2. Matching the function arguments/parameters
 
 We want to capture the individual arguments from the query so their ranges can
@@ -126,11 +128,12 @@ function/call name.
 Currently, there is no difference between how `method_name` and `function_name`
 are handle, but they may be handled differently in the future.
 
-
+### Match from the root of function declaration/argument
 **NOTE:** When matching function arguments or function names, match them from
-the root of the function declaration/call, like how it is presented below.
+the root of the function declaration/call, as shown below, as to be able to 
+match the identifier as well as the argument.
 
-Putting this together for Rust
+### Putting this together for Rust
 ```query
 ; Match function declarations
 (function_item
