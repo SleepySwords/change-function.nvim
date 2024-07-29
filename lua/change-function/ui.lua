@@ -5,13 +5,19 @@ local M = {}
 
 local function update_lines(bufnr, lines)
   vim.api.nvim_set_option_value("modifiable", true, { buf = bufnr })
-  vim.api.nvim_buf_set_lines(bufnr, 0, #lines, false, vim.tbl_map(function(i)
-    local new_line_char = string.find(i.line, "\n")
-    if new_line_char == nil then
-      new_line_char = 0
-    end
-    return i.line:sub(1, new_line_char - 1)
-  end, lines))
+  vim.api.nvim_buf_set_lines(
+    bufnr,
+    0,
+    #lines,
+    false,
+    vim.tbl_map(function(i)
+      local new_line_char = string.find(i.line, "\n")
+      if new_line_char == nil then
+        new_line_char = 0
+      end
+      return i.line:sub(1, new_line_char - 1)
+    end, lines)
+  )
   vim.api.nvim_set_option_value("modifiable", false, { buf = bufnr })
 end
 
@@ -53,15 +59,15 @@ function M.open_ui(lines, node_name, handler)
   end, { noremap = true })
 
   popup:map("n", M.config.mappings.quit, function(_)
-    vim.cmd [[q]]
+    vim.cmd([[q]])
   end, { noremap = true })
 
   popup:map("n", M.config.mappings.quit2, function(_)
-    vim.cmd [[q]]
+    vim.cmd([[q]])
   end, { noremap = true })
 
   popup:map("n", M.config.mappings.confirm, function(_)
-    vim.cmd [[q]]
+    vim.cmd([[q]])
     vim.ui.select({ "Confirm", "Cancel" }, { prompt = "Are you sure?" }, function(i)
       if i == "Cancel" then
         return

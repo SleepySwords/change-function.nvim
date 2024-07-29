@@ -14,8 +14,7 @@ local ts = vim.treesitter
 local M = {}
 
 local function get_queries()
-  return ts.query.get(vim.bo.filetype,
-    config_manager.config.queries[vim.bo.filetype] or "textobjects")
+  return ts.query.get(vim.bo.filetype, config_manager.config.queries[vim.bo.filetype] or "textobjects")
 end
 
 local function make_position_param(win)
@@ -28,7 +27,7 @@ end
 --- @param node TSNode
 --- @return TextRange, string
 local function get_range_text(node, bufnr)
-  local row1, col1, row2, col2 = node:range();
+  local row1, col1, row2, col2 = node:range()
   local range = {
     start = {
       line = row1,
@@ -37,18 +36,29 @@ local function get_range_text(node, bufnr)
     ["end"] = {
       line = row2,
       character = col2,
-    }
+    },
   }
-  local buf_text = (api.nvim_buf_get_text(bufnr, row1, col1, row2, col2, {}));
-  local text = table.concat(buf_text, "\n");
+  local buf_text = (api.nvim_buf_get_text(bufnr, row1, col1, row2, col2, {}))
+  local text = table.concat(buf_text, "\n")
   return range, text
 end
+
+local function in_range(range, pos)
+  return range.start.line <= pos[1]
+    and pos[1] <= range["end"].line
+    and range.start.character <= pos[2]
+    and pos[2] <= range["end"].character
+end
+
+IDENTIFYING_CAPTURES = { ["function_name"] = true, ["method_name"] = true }
+ARGUMENT_CAPTURES = { ["parameter.inner"] = true, ["argument.inner"] = true }
 
 --- Get the parameters/arguments from the function signature.
 --- @param node TSNode The node of the function signature
 --- @param bufnr integer The buffer number of the buffer where the node resides.
+--- @param cursor table<integer, integer> The cursor of this even..
 --- @return table<any, Text>?
-local function get_arguments(node, bufnr)
+local function get_arguments(node, bufnr, cursor)
   local query_function = get_queries()
 
   if query_function == nil then
@@ -56,7 +66,7 @@ local function get_arguments(node, bufnr)
     return
   end
 
-  while query_function:iter_matches(node, bufnr, nil, nil, { all = true, max_start_depth = 1 })() == nil do
+  while query_function:iter_matches(node, bufnr, nil, nil, { all = true, max_start_depth = 0 })() == nil do
     node = node:parent()
     if node == nil then
       vim.print("Node did not match")
@@ -66,15 +76,19 @@ local function get_arguments(node, bufnr)
 
   local arguments = {}
   local ignore = {}
-  for _, match, _ in query_function:iter_matches(node, bufnr, nil, nil, { all = true, max_start_depth = 1 }) do
+  for _, match, _ in query_function:iter_matches(node, bufnr, nil, nil, { all = true, max_start_depth = 0 }) do
     for id, nodes in pairs(match) do
       local name = query_function.captures[id]
       for _, matched_node in ipairs(nodes) do
-        local range, text = get_range_text(matched_node, bufnr);
-        if name == "parameter.inner" then
+        local range, text = get_range_text(matched_node, bufnr)
+        if (IDENTIFYING_CAPTURES[name] ~= nil) and not in_range(range, cursor) then
+          vim.print("Cursor is not on top of a method")
+          return
+        end
+        if ARGUMENT_CAPTURES[name] ~= nil then
           table.insert(arguments, {
             range = range,
-            text = text
+            text = text,
           })
         end
         if name == "parameter.inner.ignore" then
@@ -108,7 +122,7 @@ local function get_text_edits(loc, changes)
     return
   end
 
-  local args = get_arguments(matched_node, bufnr);
+  local args = get_arguments(matched_node, bufnr, pos)
   if args == nil then
     return
   end
@@ -122,7 +136,7 @@ local function get_text_edits(loc, changes)
     table.insert(text_edits, {
       newText = args[v.id].text,
       range = args[i].range,
-    });
+    })
   end
   return text_edits
 end
@@ -148,9 +162,10 @@ local function handle_lsp_reference_result(results, changes)
       end
     end
   end
+  vim.print(global_text_edits)
 
   for k, v in pairs(global_text_edits) do
-    vim.lsp.util.apply_text_edits(v, k, 'UTF-8')
+    vim.lsp.util.apply_text_edits(v, k, "UTF-8")
   end
 end
 
@@ -166,7 +181,10 @@ local function make_lsp_request(buf, method, params)
     local curr_node = ts.get_node()
 
     if curr_node ~= nil then
-      local arguments = get_arguments(curr_node, buf);
+      local arguments = get_arguments(curr_node, buf, {
+        vim.api.nvim_win_get_cursor(0)[1] - 1,
+        vim.api.nvim_win_get_cursor(0)[2],
+      })
       if arguments == nil then
         return
       end
@@ -175,13 +193,13 @@ local function make_lsp_request(buf, method, params)
       local lines = vim.tbl_map(function(i)
         index = index + 1
         return { line = i.text, id = index }
-      end, arguments);
+      end, arguments)
 
       ui.open_ui(lines, ts.get_node_text(curr_node, buf, {}), function()
-        local filtered_changes = {};
-        for i,v in ipairs(lines) do
+        local filtered_changes = {}
+        for i, v in ipairs(lines) do
           if i ~= v.id then
-            filtered_changes[#filtered_changes+1] = v
+            filtered_changes[#filtered_changes + 1] = v
           end
         end
         handle_lsp_reference_result(results, filtered_changes)
