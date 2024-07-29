@@ -88,7 +88,7 @@ are named `function_params.scm` files and are individual to each language. These
 files are stored in the runtime `queries` directory, so local configurations are
 also able to add or override them.
 
-1. Finding the function calls/declarations
+### 1. Finding the function calls/declarations
 
 You can use the `:InspectTree` command to see how treesitter parses the
 language. The items we want to find are the all the function declarations and
@@ -97,7 +97,7 @@ call/declaration and seeing where it lands on the tree.
 
 Usually, they would have a similar name to `function_item` or `call_expression`.
 
-2. Matching the function arguments/parameters
+### 2. Matching the function arguments/parameters
 
 We want to capture the individual arguments from the query so their ranges can
 be found and swapped. Usually, these arguments are within the
@@ -110,7 +110,7 @@ placeholder value `(_)` could be used.
 Ensure, you place both a function declaration and a call expression if your
 language supports it to update references across your project.
 
-3. Matching the function/method names
+### 3. Matching the function/method names
 
 You may also would want to add captures for identifiers, such as `method_name`
 and `function_name`. This allows for `change-function.nvim` to detect if the
@@ -181,7 +181,7 @@ If you have written a nice query, please contribute it here :)
 - [x] Allow for customisability with nui
 - [x] Refactor so `function_declaration.scm` and `function_call.scm` are the
   same.
-- [ ] Find a better way to find the function declaration/call, rather than
+- [x] Find a better way to find the function declaration/call, rather than
   recursively calling parent to find the matched node (as this breaks when you
   try and use this on a value rather than a function).
 - [ ] Add more queries for different languages
