@@ -50,6 +50,9 @@ local function in_range(range, pos)
     and pos[2] <= range["end"].character
 end
 
+IDENTIFYING_CAPTURES = { ["function_name"] = true, ["method_name"] = true }
+ARGUMENT_CAPTURES = { ["parameter.inner"] = true, ["argument.inner"] = true }
+
 --- Get the parameters/arguments from the function signature.
 --- @param node TSNode The node of the function signature
 --- @param bufnr integer The buffer number of the buffer where the node resides.
@@ -78,14 +81,11 @@ local function get_arguments(node, bufnr, cursor)
       local name = query_function.captures[id]
       for _, matched_node in ipairs(nodes) do
         local range, text = get_range_text(matched_node, bufnr)
-        if
-          (name == "function" or name == "method" or name == "function_declaration" or name == "method_declaration")
-          and not in_range(range, cursor)
-        then
+        if (IDENTIFYING_CAPTURES[name] ~= nil) and not in_range(range, cursor) then
           vim.print("Cursor is not on top of a method")
           return
         end
-        if name == "parameter.inner" or name == "argument.inner" then
+        if ARGUMENT_CAPTURES[name] ~= nil then
           table.insert(arguments, {
             range = range,
             text = text,

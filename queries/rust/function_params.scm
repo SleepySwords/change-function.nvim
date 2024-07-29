@@ -1,5 +1,5 @@
 (function_item
-    name: (identifier) @function
+    name: (identifier) @function_name
     parameters: (parameters
         (parameter) @parameter.inner
     )
@@ -13,7 +13,7 @@
 
 (call_expression
   function: (field_expression
-    field: (field_identifier) @method
+    field: (field_identifier) @method_name
   )
   arguments: (arguments
       (_) @parameter.inner
@@ -22,7 +22,7 @@
 
 (call_expression
   function: (scoped_identifier
-    name: (identifier) @function
+    name: (identifier) @function_name
   )
   arguments: (arguments
       (_) @parameter.inner
@@ -30,7 +30,7 @@
 )
 
 (call_expression
-  function: (identifier) @function
+  function: (identifier) @function_name
   arguments: (arguments
       (_) @parameter.inner
   )
