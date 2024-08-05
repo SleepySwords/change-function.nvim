@@ -1,6 +1,7 @@
 local defaults = {
   queries = {
     rust = "function_params",
+    lua = "function_params",
   },
 
   nui = function(node_name)
