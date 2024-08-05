@@ -62,14 +62,14 @@ local function get_arguments(node, bufnr, cursor)
   local query_function = get_queries()
 
   if query_function == nil then
-    vim.print("Queries are not available for this filetype")
+    vim.notify("Queries are not available for this filetype")
     return
   end
 
   while query_function:iter_matches(node, bufnr, nil, nil, { all = true, max_start_depth = 0 })() == nil do
     node = node:parent()
     if node == nil then
-      vim.print("Node did not match")
+      vim.notify("Node did not match")
       return
     end
   end
@@ -84,7 +84,7 @@ local function get_arguments(node, bufnr, cursor)
         local range, text = range_text(matched_node, bufnr)
 
         if (IDENTIFYING_CAPTURES[capture_name] ~= nil) and not inside_range(range, cursor) then
-          vim.print("Cursor is not on top of a method")
+          vim.notify("Cursor is not on top of a method")
           return
         end
 
@@ -121,7 +121,7 @@ local function get_text_edits(loc, changes)
   local pos = { loc["range"]["start"]["line"], loc["range"]["start"]["character"] }
   local matched_node = ts.get_node({ pos = pos, bufnr = bufnr, lang = vim.bo.filetype })
   if matched_node == nil then
-    vim.print("Could not find a node.")
+    vim.notify("Could not find a node.")
     return
   end
 
@@ -129,14 +129,13 @@ local function get_text_edits(loc, changes)
   if args == nil then
     return
   end
-  vim.print(changes);
-  vim.print(args);
 
   local text_edits = {}
   for i, v in ipairs(changes) do
-    if v ~= nil then
+    -- Don't include textedits that dot not change anything.
+    if i ~= v.id then
       if #args < v.id then
-        vim.print("Failed to swap, no such argument in reference")
+        vim.notify("Failed to swap, no such argument in reference")
         return
       end
       table.insert(text_edits, {
@@ -146,8 +145,6 @@ local function get_text_edits(loc, changes)
     end
   end
 
-  vim.print(text_edits);
-
   return text_edits
 end
 
@@ -156,7 +153,7 @@ local function handle_lsp_reference_result(results, changes)
   local global_text_edits = {}
   for _, res in ipairs(results) do
     if res.error then
-      vim.print("An error occured: " .. res.error)
+      vim.notify("An error occured: " .. res.error)
       return
     end
 
@@ -184,7 +181,7 @@ local function make_lsp_request(buf, method, params)
   local query_function = get_queries()
 
   if query_function == nil then
-    vim.print("Queries are not available for this filetype")
+    vim.notify("Queries are not available for this filetype")
     return
   end
 
@@ -207,11 +204,7 @@ local function make_lsp_request(buf, method, params)
       end, arguments)
 
       ui.open_ui(lines, ts.get_node_text(curr_node, buf, {}), function()
-        local filtered_changes = {}
-        for _, v in ipairs(lines) do
-          filtered_changes[#filtered_changes + 1] = v
-        end
-        handle_lsp_reference_result(results, filtered_changes)
+        handle_lsp_reference_result(results, lines)
       end)
     end
   end)
