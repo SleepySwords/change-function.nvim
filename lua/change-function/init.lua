@@ -6,6 +6,10 @@
 --- @field text string
 --- @field range TextRange
 
+--- @class Position
+--- @field bufnr integer
+--- @field location integer[]
+
 local ui = require("change-function.ui")
 local config_manager = require("change-function.config")
 local api = vim.api
@@ -52,15 +56,15 @@ end
 
 local function inside_range(range, pos)
   return range.start.line <= pos[1]
-    and pos[1] <= range["end"].line
-    and range.start.character <= pos[2]
-    and pos[2] <= range["end"].character
+      and pos[1] <= range["end"].line
+      and range.start.character <= pos[2]
+      and pos[2] <= range["end"].character
 end
 
 --- Get the parameters/arguments from the function signature.
 --- @param node TSNode The node of the function signature
 --- @param bufnr integer The buffer number of the buffer where the node resides.
---- @param cursor table<integer, integer> The cursor of this even..
+--- @param cursor integer[] The cursor of this even.
 --- @return table<any, Text>?
 local function get_arguments(node, bufnr, cursor)
   local query_function = get_queries()
@@ -128,29 +132,39 @@ local function get_arguments(node, bufnr, cursor)
   return arguments
 end
 
+--- Converts a position from the reference result and return a new position
+--- @param position {}
+--- @return Position
+local function reference_position_to_position(position)
+  local bufnr = vim.uri_to_bufnr(position["uri"])
+  return {
+    bufnr = bufnr,
+    location = { position["range"]["start"]["line"], position["range"]["start"]["character"] }
+  }
+end
+
 --- Get the text edits that need to be done to change an argument
---- @param loc {} location of where the change should be done
+--- @param position Position position of where the change should be done
 --- @param changes {} The swaps that are required to change
 --- @return {}?
-local function get_text_edits(loc, changes)
-  local bufnr = vim.uri_to_bufnr(loc["uri"])
-  vim.fn.bufload(bufnr)
+local function get_text_edits(position, changes)
+  vim.fn.bufload(position.bufnr)
 
-  local pos = { loc["range"]["start"]["line"], loc["range"]["start"]["character"] }
-  local matched_node = ts.get_node({ pos = pos, bufnr = bufnr, lang = vim.bo.filetype })
+  local pos = position.location
+  local matched_node = ts.get_node({ pos = pos, bufnr = position.bufnr, lang = vim.bo.filetype })
   if matched_node == nil then
     print_error(
       string.format(
         "Could not find any nodes at the location (%d, %d) in the file %s",
         (pos[1] + 1),
         (pos[2] + 1),
-        vim.api.nvim_buf_get_name(bufnr)
+        vim.api.nvim_buf_get_name(position.bufnr)
       )
     )
     return
   end
 
-  local args = get_arguments(matched_node, bufnr, pos)
+  local args = get_arguments(matched_node, position.bufnr, pos)
   if args == nil then
     return
   end
@@ -165,7 +179,7 @@ local function get_text_edits(loc, changes)
             "Swapped argument does not exist at (%d, %d) in %s",
             pos[1] + 1,
             pos[2] + 1,
-            vim.api.nvim_buf_get_name(bufnr)
+            vim.api.nvim_buf_get_name(position.bufnr)
           )
         )
         return
@@ -180,44 +194,60 @@ local function get_text_edits(loc, changes)
   return text_edits
 end
 
---- Handles the lsp results and apply text edits
-local function handle_lsp_reference_result(results, changes)
+--- Updates the function declaration and calls at the position by applying text edits
+--- according to the changes
+--- @param positions Position[]
+--- @param changes any
+local function update_references(positions, changes)
   local global_text_edits = {}
-  for _, res in ipairs(results) do
-    if res.error then
-      print_error("An error occured while fetching references: " .. res.error)
+  for _, position in ipairs(positions) do
+    local text_edits = get_text_edits(position, changes)
+    if text_edits == nil then
       return
     end
+    if #text_edits == 0 then
+      vim.notify(
+        string.format(
+          "Did not find any Treesitter matches at (%d, %d) in %s (is this an error?)",
+          position.location[1] + 1,
+          position.location[2] + 1,
+          vim.api.nvim_buf_get_name(position.bufnr)
+        ),
+        vim.log.levels.WARN
+      )
+    end
 
-    for _, loc in ipairs(res.result) do
-      local text_edits = get_text_edits(loc, changes)
-      if text_edits == nil then
-        return
+    for _, v in ipairs(text_edits) do
+      if global_text_edits[position.bufnr] == nil then
+        global_text_edits[position.bufnr] = {}
       end
-      if #text_edits == 0 then
-        vim.notify(
-          string.format(
-            "Did not find any Treesitter matches at (%d, %d) in %s (is this an error?)",
-            loc["range"]["start"]["line"] + 1,
-            loc["range"]["start"]["character"] + 1,
-            loc["uri"]
-          ),
-          vim.log.levels.WARN
-        )
-      end
-
-      for _, v in ipairs(text_edits) do
-        if global_text_edits[vim.uri_to_bufnr(loc["uri"])] == nil then
-          global_text_edits[vim.uri_to_bufnr(loc["uri"])] = {}
-        end
-        table.insert(global_text_edits[vim.uri_to_bufnr(loc["uri"])], v)
-      end
+      table.insert(global_text_edits[position.bufnr], v)
     end
   end
 
   for k, v in pairs(global_text_edits) do
     vim.lsp.util.apply_text_edits(v, k, "UTF-8")
   end
+end
+
+--- Handles the lsp results and apply text edits
+local function handle_lsp_reference_result(results, changes)
+  local global_text_edits = {}
+
+  for _, res in ipairs(results) do
+    if res.error then
+      print_error("An error occured while fetching references: " .. res.error)
+      return
+    end
+  end
+
+  local positions = vim.iter(results):map(function(res)
+    return res.result
+  end):flatten():map(function(location)
+    return reference_position_to_position(location)
+  end):totable()
+
+  update_references(positions, changes)
 end
 
 local function make_lsp_request(buf, method, params)
