@@ -10,10 +10,21 @@
 --- @field bufnr integer
 --- @field location integer[]
 
+--- @class Argument Note: the `Argument[]` indicates the order of the NEW arguments,
+--- wheras the id provides the arguments of the OLD list
+--- @field line string The contents of this particular argument
+--- @field id string The index of this particular argument in all the arguments (before swapping)
+
 local ui = require("change-function.ui")
 local config_manager = require("change-function.config")
 local api = vim.api
 local ts = vim.treesitter
+
+local utils = require("change-function.utils")
+local reference_position_to_position = utils.reference_position_to_position
+local inside_range = utils.inside_range
+local range_text = utils.range_text
+local convert_win_cursor_to_position = utils.convert_win_cursor_to_position
 
 local M = {}
 
@@ -24,49 +35,16 @@ local function get_queries()
   return ts.query.get(vim.bo.filetype, config_manager.config.queries[vim.bo.filetype] or "textobjects")
 end
 
-local function make_win_cursor_position(win)
-  local row, col = unpack(api.nvim_win_get_cursor(win))
-  row = row - 1
-  return { line = row, character = col }
-end
-
 local function print_error(msg)
   vim.notify("Failed to swap: " .. msg, vim.log.levels.ERROR)
-end
-
---- Get the text and the range of a ndoe.
---- @param node TSNode
---- @return TextRange, string
-local function range_text(node, bufnr)
-  local row1, col1, row2, col2 = node:range()
-  local range = {
-    start = {
-      line = row1,
-      character = col1,
-    },
-    ["end"] = {
-      line = row2,
-      character = col2,
-    },
-  }
-  local buf_text = (api.nvim_buf_get_text(bufnr, row1, col1, row2, col2, {}))
-  local text = table.concat(buf_text, "\n")
-  return range, text
-end
-
-local function inside_range(range, pos)
-  return range.start.line <= pos[1]
-      and pos[1] <= range["end"].line
-      and range.start.character <= pos[2]
-      and pos[2] <= range["end"].character
 end
 
 --- Get the parameters/arguments from the function signature.
 --- @param node TSNode The node of the function signature
 --- @param bufnr integer The buffer number of the buffer where the node resides.
---- @param cursor integer[] The cursor of this even.
+--- @param position integer[] The cursor of the expected function signature
 --- @return table<any, Text>?
-local function get_arguments(node, bufnr, cursor)
+local function get_arguments(node, bufnr, position)
   local query_function = get_queries()
 
   if query_function == nil then
@@ -80,8 +58,8 @@ local function get_arguments(node, bufnr, cursor)
       print_error(
         string.format(
           "Could not find a function at (%d, %d) in the file %s",
-          (cursor[1] + 1),
-          (cursor[2] + 1),
+          (position[1] + 1),
+          (position[2] + 1),
           vim.api.nvim_buf_get_name(bufnr)
         )
       )
@@ -98,12 +76,12 @@ local function get_arguments(node, bufnr, cursor)
       for _, matched_node in ipairs(nodes) do
         local range, text = range_text(matched_node, bufnr)
 
-        if (IDENTIFYING_CAPTURES[capture_name] ~= nil) and not inside_range(range, cursor) then
+        if (IDENTIFYING_CAPTURES[capture_name] ~= nil) and not inside_range(range, position) then
           print_error(
             string.format(
               "Could not find a function at (%d, %d) in the file %s",
-              (cursor[1] + 1),
-              (cursor[2] + 1),
+              (position[1] + 1),
+              (position[2] + 1),
               vim.api.nvim_buf_get_name(bufnr)
             )
           )
@@ -132,20 +110,9 @@ local function get_arguments(node, bufnr, cursor)
   return arguments
 end
 
---- Converts a position from the reference result and return a new position
---- @param position {}
---- @return Position
-local function reference_position_to_position(position)
-  local bufnr = vim.uri_to_bufnr(position["uri"])
-  return {
-    bufnr = bufnr,
-    location = { position["range"]["start"]["line"], position["range"]["start"]["character"] }
-  }
-end
-
 --- Get the text edits that need to be done to change an argument
 --- @param position Position position of where the change should be done
---- @param changes {} The swaps that are required to change
+--- @param changes Argument[] The swaps that are required to change
 --- @return {}?
 local function get_text_edits(position, changes)
   vim.fn.bufload(position.bufnr)
@@ -197,8 +164,8 @@ end
 --- Updates the function declaration and calls at the position by applying text edits
 --- according to the changes
 --- @param positions Position[]
---- @param changes any
-local function update_references(positions, changes)
+--- @param changes Argument[]
+local function update_at_positions(positions, changes)
   local global_text_edits = {}
   for _, position in ipairs(positions) do
     local text_edits = get_text_edits(position, changes)
@@ -232,8 +199,6 @@ end
 
 --- Handles the lsp results and apply text edits
 local function handle_lsp_reference_result(results, changes)
-  local global_text_edits = {}
-
   for _, res in ipairs(results) do
     if res.error then
       print_error("An error occured while fetching references: " .. res.error)
@@ -241,13 +206,18 @@ local function handle_lsp_reference_result(results, changes)
     end
   end
 
-  local positions = vim.iter(results):map(function(res)
-    return res.result
-  end):flatten():map(function(location)
-    return reference_position_to_position(location)
-  end):totable()
+  local positions = vim
+      .iter(results)
+      :map(function(res)
+        return res.result
+      end)
+      :flatten()
+      :map(function(location)
+        return reference_position_to_position(location)
+      end)
+      :totable()
 
-  update_references(positions, changes)
+  update_at_positions(positions, changes)
 end
 
 local function make_lsp_request(buf, method, params)
@@ -261,25 +231,27 @@ local function make_lsp_request(buf, method, params)
   vim.lsp.buf_request_all(buf, method, params, function(results)
     local curr_node = ts.get_node()
 
-    if curr_node ~= nil then
-      local arguments = get_arguments(curr_node, buf, {
-        vim.api.nvim_win_get_cursor(0)[1] - 1,
-        vim.api.nvim_win_get_cursor(0)[2],
-      })
-      if arguments == nil then
-        return
-      end
-
-      local index = 0
-      local lines = vim.tbl_map(function(i)
-        index = index + 1
-        return { line = i.text, id = index }
-      end, arguments)
-
-      ui.open_ui(lines, ts.get_node_text(curr_node, buf, {}), function()
-        handle_lsp_reference_result(results, lines)
-      end)
+    if curr_node == nil then
+      return
     end
+
+    local arguments = get_arguments(curr_node, buf, {
+      vim.api.nvim_win_get_cursor(0)[1] - 1,
+      vim.api.nvim_win_get_cursor(0)[2],
+    })
+    if arguments == nil then
+      return
+    end
+
+    local index = 0
+    local lines = vim.tbl_map(function(i)
+      index = index + 1
+      return { line = i.text, id = index }
+    end, arguments)
+
+    ui.open_ui(lines, ts.get_node_text(curr_node, buf, {}), function()
+      handle_lsp_reference_result(results, lines)
+    end)
   end)
 end
 
@@ -288,7 +260,7 @@ function M.change_function()
   local method = "textDocument/references"
   local params = {
     textDocument = { uri = vim.uri_from_bufnr(api.nvim_get_current_buf()) },
-    position = make_win_cursor_position(api.nvim_get_current_win()),
+    position = convert_win_cursor_to_position(api.nvim_get_current_win()),
   }
   params.context = { includeDeclaration = true }
 
