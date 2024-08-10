@@ -4,7 +4,7 @@
 
 --- @class Text
 --- @field text string
---- @field range Range
+--- @field range TextRange
 
 local ui = require("change-function.ui")
 local config_manager = require("change-function.config")
@@ -24,6 +24,10 @@ local function make_win_cursor_position(win)
   local row, col = unpack(api.nvim_win_get_cursor(win))
   row = row - 1
   return { line = row, character = col }
+end
+
+local function print_error(msg)
+  vim.notify("Failed to swap: " .. msg, vim.log.levels.ERROR)
 end
 
 --- Get the text and the range of a ndoe.
@@ -48,9 +52,9 @@ end
 
 local function inside_range(range, pos)
   return range.start.line <= pos[1]
-      and pos[1] <= range["end"].line
-      and range.start.character <= pos[2]
-      and pos[2] <= range["end"].character
+    and pos[1] <= range["end"].line
+    and range.start.character <= pos[2]
+    and pos[2] <= range["end"].character
 end
 
 --- Get the parameters/arguments from the function signature.
@@ -62,14 +66,21 @@ local function get_arguments(node, bufnr, cursor)
   local query_function = get_queries()
 
   if query_function == nil then
-    vim.notify("Queries are not available for this filetype")
+    print_error("Queries are not available for this filetype")
     return
   end
 
   while query_function:iter_matches(node, bufnr, nil, nil, { all = true, max_start_depth = 0 })() == nil do
     node = node:parent()
     if node == nil then
-      vim.notify("Node did not match")
+      print_error(
+        string.format(
+          "Could not find a function at (%d, %d) in the file %s",
+          (cursor[1] + 1),
+          (cursor[2] + 1),
+          vim.api.nvim_buf_get_name(bufnr)
+        )
+      )
       return
     end
   end
@@ -84,7 +95,14 @@ local function get_arguments(node, bufnr, cursor)
         local range, text = range_text(matched_node, bufnr)
 
         if (IDENTIFYING_CAPTURES[capture_name] ~= nil) and not inside_range(range, cursor) then
-          vim.notify("Cursor is not on top of a method")
+          print_error(
+            string.format(
+              "Could not find a function at (%d, %d) in the file %s",
+              (cursor[1] + 1),
+              (cursor[2] + 1),
+              vim.api.nvim_buf_get_name(bufnr)
+            )
+          )
           return
         end
 
@@ -121,7 +139,14 @@ local function get_text_edits(loc, changes)
   local pos = { loc["range"]["start"]["line"], loc["range"]["start"]["character"] }
   local matched_node = ts.get_node({ pos = pos, bufnr = bufnr, lang = vim.bo.filetype })
   if matched_node == nil then
-    vim.notify("Could not find a node.")
+    print_error(
+      string.format(
+        "Could not find any nodes at the location (%d, %d) in the file %s",
+        (pos[1] + 1),
+        (pos[2] + 1),
+        vim.api.nvim_buf_get_name(bufnr)
+      )
+    )
     return
   end
 
@@ -135,7 +160,14 @@ local function get_text_edits(loc, changes)
     -- Don't include textedits that dot not change anything.
     if i ~= v.id then
       if #args < v.id then
-        vim.notify("Failed to swap, no such argument in reference")
+        print_error(
+          string.format(
+            "Swapped argument does not exist at (%d, %d) in %s",
+            pos[1] + 1,
+            pos[2] + 1,
+            vim.api.nvim_buf_get_name(bufnr)
+          )
+        )
         return
       end
       table.insert(text_edits, {
@@ -153,7 +185,7 @@ local function handle_lsp_reference_result(results, changes)
   local global_text_edits = {}
   for _, res in ipairs(results) do
     if res.error then
-      vim.notify("An error occured: " .. res.error)
+      print_error("An error occured while fetching references: " .. res.error)
       return
     end
 
@@ -161,6 +193,17 @@ local function handle_lsp_reference_result(results, changes)
       local text_edits = get_text_edits(loc, changes)
       if text_edits == nil then
         return
+      end
+      if #text_edits == 0 then
+        vim.notify(
+          string.format(
+            "Did not find any Treesitter matches at (%d, %d) in %s (is this an error?)",
+            loc["range"]["start"]["line"] + 1,
+            loc["range"]["start"]["character"] + 1,
+            loc["uri"]
+          ),
+          vim.log.levels.WARN
+        )
       end
 
       for _, v in ipairs(text_edits) do
@@ -181,7 +224,7 @@ local function make_lsp_request(buf, method, params)
   local query_function = get_queries()
 
   if query_function == nil then
-    vim.notify("Queries are not available for this filetype")
+    print_error("Could not find a query for this filetype")
     return
   end
 
