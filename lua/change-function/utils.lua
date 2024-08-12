@@ -1,8 +1,8 @@
 local M = {}
 
---- Converts a position from the reference result and return a new position
---- @param position {}
---- @return Position
+---Converts a position from the reference result and return a new position
+---@param position {}
+---@return Position
 function M.reference_position_to_position(position)
   local bufnr = vim.uri_to_bufnr(position["uri"])
   return {
@@ -18,9 +18,9 @@ function M.inside_range(range, pos)
       and pos[2] <= range["end"].character
 end
 
---- Get the text and the range of a ndoe.
---- @param node TSNode
---- @return TextRange, string
+---Get the text and the range of a ndoe.
+---@param node TSNode
+---@return TextRange, string
 function M.range_text(node, bufnr)
   local row1, col1, row2, col2 = node:range()
   local range = {

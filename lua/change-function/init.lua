@@ -1,19 +1,19 @@
---- @class TextRange
---- @field start {line: integer, character: integer}
---- @field end {line: integer, character: integer}
+---@class TextRange
+---@field start {line: integer, character: integer}
+---@field end {line: integer, character: integer}
 
---- @class Text
---- @field text string
---- @field range TextRange
+---@class Text
+---@field text string
+---@field range TextRange
 
---- @class Position
---- @field bufnr integer
---- @field location integer[]
+---@class Position
+---@field bufnr integer
+---@field location integer[]
 
---- @class Argument Note: the `Argument[]` indicates the order of the NEW arguments,
---- wheras the id provides the arguments of the OLD list
---- @field line string The contents of this particular argument
---- @field id string The index of this particular argument in all the arguments (before swapping)
+---@class Argument Note: the `Argument[]` indicates the order of the NEW arguments,
+---wheras the id provides the arguments of the OLD list
+---@field line string The contents of this particular argument
+---@field id string The index of this particular argument in all the arguments (before swapping)
 
 local ui = require("change-function.ui")
 local config_manager = require("change-function.config")
@@ -39,11 +39,11 @@ local function print_error(msg)
   vim.notify("Failed to swap: " .. msg, vim.log.levels.ERROR)
 end
 
---- Get the parameters/arguments from the function signature.
---- @param node TSNode The node of the function signature
---- @param bufnr integer The buffer number of the buffer where the node resides.
---- @param position integer[] The cursor of the expected function signature
---- @return table<any, Text>?
+---Get the parameters/arguments from the function signature.
+---@param node TSNode The node of the function signature
+---@param bufnr integer The buffer number of the buffer where the node resides.
+---@param position integer[] The cursor of the expected function signature
+---@return {range: TextRange, text: string}[]? The range of the arguments in the signature + the text it contains.
 local function get_arguments(node, bufnr, position)
   local query_function = get_queries()
 
@@ -110,11 +110,12 @@ local function get_arguments(node, bufnr, position)
   return arguments
 end
 
---- Get the text edits that need to be done to change an argument
---- @param position Position position of where the change should be done
---- @param changes Argument[] The swaps that are required to change
---- @return {}?
+---Get the text edits that need to be done to change an argument
+---@param position Position position of where the change should be done
+---@param changes Argument[] The swaps that are required to change
+---@return {newText: string, range: TextRange}[]?
 local function get_text_edits(position, changes)
+  vim.print(position.bufnr)
   vim.fn.bufload(position.bufnr)
 
   local pos = position.location
@@ -169,7 +170,7 @@ local function update_at_positions(positions, changes)
   local global_text_edits = {}
   for _, position in ipairs(positions) do
     local text_edits = get_text_edits(position, changes)
-    if text_edits == nil then
+    if text_edits == nil then -- FIXME: add strictness
       return
     end
     if #text_edits == 0 then
@@ -220,6 +221,36 @@ local function handle_lsp_reference_result(results, changes)
   update_at_positions(positions, changes)
 end
 
+function M.update_qf_list()
+  local list = vim.fn.getqflist({ idx = 0, items = true });
+  local items = list.items
+  local idx = list.idx;
+  local curr_entry = items[idx]
+  local pos = { items[idx].lnum - 1, items[idx].col - 1, }
+
+  local curr_node = ts.get_node({ bufnr = curr_entry.bufnr, pos = pos, lang = vim.bo.filetype })
+  if curr_node ~= nil then
+    local arguments = get_arguments(curr_node, curr_entry.bufnr, pos)
+    if arguments == nil then
+      return
+    end
+
+    local index = 0
+    local lines = vim.tbl_map(function(i)
+      index = index + 1
+      return { line = i.text, id = index }
+    end, arguments)
+
+    ui.open_ui(lines, ts.get_node_text(curr_node, curr_entry.bufnr, {}), function(swapped_lines)
+      local positions = vim.iter(items):map(function(qf_entry)
+        return { bufnr = qf_entry.bufnr, location = { qf_entry.lnum - 1, qf_entry.col - 1 } }
+      end):totable()
+
+      update_at_positions(positions, swapped_lines)
+    end)
+  end
+end
+
 local function make_lsp_request(buf, method, params)
   local query_function = get_queries()
 
@@ -249,8 +280,8 @@ local function make_lsp_request(buf, method, params)
       return { line = i.text, id = index }
     end, arguments)
 
-    ui.open_ui(lines, ts.get_node_text(curr_node, buf, {}), function()
-      handle_lsp_reference_result(results, lines)
+    ui.open_ui(lines, ts.get_node_text(curr_node, buf, {}), function(swaped_lines)
+      handle_lsp_reference_result(results, swaped_lines)
     end)
   end)
 end

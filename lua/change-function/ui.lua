@@ -41,6 +41,10 @@ function M.set_config(config_manager)
   M.config = config_manager.config
 end
 
+---Open the UI to swap arguments
+---@param lines Argument[] The arguments that will be displayed in this UI
+---@param node_name string The title of this user interface
+---@param handler fun(swapped_args: Argument[])
 function M.open_ui(lines, node_name, handler)
   local popup = Popup(M.config.nui(node_name))
 
@@ -50,23 +54,23 @@ function M.open_ui(lines, node_name, handler)
     popup:unmount()
   end)
 
-  popup:map("n", M.config.mappings.move_down, function(_)
+  popup:map("n", M.config.mappings.move_down, function()
     move(popup.bufnr, lines, #lines, 1)
   end, { noremap = true })
 
-  popup:map("n", M.config.mappings.move_up, function(_)
+  popup:map("n", M.config.mappings.move_up, function()
     move(popup.bufnr, lines, 1, -1)
   end, { noremap = true })
 
-  popup:map("n", M.config.mappings.quit, function(_)
+  popup:map("n", M.config.mappings.quit, function()
     vim.cmd([[q]])
   end, { noremap = true })
 
-  popup:map("n", M.config.mappings.quit2, function(_)
+  popup:map("n", M.config.mappings.quit2, function()
     vim.cmd([[q]])
   end, { noremap = true })
 
-  popup:map("n", M.config.mappings.confirm, function(_)
+  popup:map("n", M.config.mappings.confirm, function()
     vim.cmd([[q]])
     vim.ui.select({ "Confirm", "Cancel" }, { prompt = "Are you sure?" }, function(i)
       if i == "Cancel" then
