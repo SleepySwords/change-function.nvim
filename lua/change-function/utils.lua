@@ -13,9 +13,9 @@ end
 
 function M.inside_range(range, pos)
   return range.start.line <= pos[1]
-      and pos[1] <= range["end"].line
-      and range.start.character <= pos[2]
-      and pos[2] <= range["end"].character
+    and pos[1] <= range["end"].line
+    and range.start.character <= pos[2]
+    and pos[2] <= range["end"].character
 end
 
 ---Get the text and the range of a ndoe.

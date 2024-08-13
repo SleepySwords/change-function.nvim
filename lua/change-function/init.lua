@@ -198,35 +198,12 @@ local function update_at_positions(positions, changes)
   end
 end
 
---- Handles the lsp results and apply text edits
-local function handle_lsp_reference_result(results, changes)
-  for _, res in ipairs(results) do
-    if res.error then
-      print_error("An error occured while fetching references: " .. res.error)
-      return
-    end
-  end
-
-  local positions = vim
-      .iter(results)
-      :map(function(res)
-        return res.result
-      end)
-      :flatten()
-      :map(function(location)
-        return reference_position_to_position(location)
-      end)
-      :totable()
-
-  update_at_positions(positions, changes)
-end
-
 function M.update_qf_list()
-  local list = vim.fn.getqflist({ idx = 0, items = true });
+  local list = vim.fn.getqflist({ idx = 0, items = true })
   local items = list.items
-  local idx = list.idx;
+  local idx = list.idx
   local curr_entry = items[idx]
-  local pos = { items[idx].lnum - 1, items[idx].col - 1, }
+  local pos = { items[idx].lnum - 1, items[idx].col - 1 }
 
   local curr_node = ts.get_node({ bufnr = curr_entry.bufnr, pos = pos, lang = vim.bo.filetype })
   if curr_node ~= nil then
@@ -242,9 +219,12 @@ function M.update_qf_list()
     end, arguments)
 
     ui.open_ui(lines, ts.get_node_text(curr_node, curr_entry.bufnr, {}), function(swapped_lines)
-      local positions = vim.iter(items):map(function(qf_entry)
-        return { bufnr = qf_entry.bufnr, location = { qf_entry.lnum - 1, qf_entry.col - 1 } }
-      end):totable()
+      local positions = vim
+          .iter(items)
+          :map(function(qf_entry)
+            return { bufnr = qf_entry.bufnr, location = { qf_entry.lnum - 1, qf_entry.col - 1 } }
+          end)
+          :totable()
 
       update_at_positions(positions, swapped_lines)
     end)
@@ -260,8 +240,14 @@ local function make_lsp_request(buf, method, params)
   end
 
   vim.lsp.buf_request_all(buf, method, params, function(results)
-    local curr_node = ts.get_node()
+    for _, res in ipairs(results) do
+      if res.error then
+        print_error("An error occured while fetching references: " .. res.error)
+        return
+      end
+    end
 
+    local curr_node = ts.get_node()
     if curr_node == nil then
       return
     end
@@ -281,7 +267,18 @@ local function make_lsp_request(buf, method, params)
     end, arguments)
 
     ui.open_ui(lines, ts.get_node_text(curr_node, buf, {}), function(swaped_lines)
-      handle_lsp_reference_result(results, swaped_lines)
+      local positions = vim
+          .iter(results)
+          :map(function(res)
+            return res.result
+          end)
+          :flatten()
+          :map(function(location)
+            return reference_position_to_position(location)
+          end)
+          :totable()
+
+      update_at_positions(positions, swaped_lines)
     end)
   end)
 end
