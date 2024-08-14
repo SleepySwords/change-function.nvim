@@ -72,12 +72,16 @@ function M.open_ui(lines, node_name, handler)
 
   popup:map("n", M.config.mappings.confirm, function()
     vim.cmd([[q]])
-    vim.ui.select({ "Confirm", "Cancel" }, { prompt = "Are you sure?" }, function(i)
-      if i == "Cancel" then
-        return
+    vim.ui.select(
+      { "Confirm", "Cancel" },
+      { prompt = "Are you sure?" },
+      function(i)
+        if i == "Cancel" then
+          return
+        end
+        handler(lines)
       end
-      handler(lines)
-    end)
+    )
   end, { noremap = true })
 
   update_lines(popup.bufnr, lines)

@@ -1,4 +1,19 @@
+---@enum MappingName
+local mapping_default = {
+  quit = "q",
+  quit2 = "<esc>",
+  move_down = "<S-j>",
+  move_up = "<S-k>",
+  confirm = "<enter>",
+}
+
+---@class ChangeFunctionConfig
+---@field queries? table<string, string>
+---@field nui? fun (node_name: string): NuiPopup
+---@field mappings? table<MappingName, string>
+
 local defaults = {
+
   queries = {
     rust = "function_params",
     lua = "function_params",

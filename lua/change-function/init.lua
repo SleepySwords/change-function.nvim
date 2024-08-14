@@ -31,8 +31,14 @@ local M = {}
 IDENTIFYING_CAPTURES = { ["function_name"] = true, ["method_name"] = true }
 ARGUMENT_CAPTURES = { ["parameter.inner"] = true, ["argument.inner"] = true }
 
-local function get_queries()
-  return ts.query.get(vim.bo.filetype, config_manager.config.queries[vim.bo.filetype] or "textobjects")
+local function get_queries(bufnr)
+  if bufnr == nil then
+    bufnr = 0
+  end
+  return ts.query.get(
+    vim.bo[bufnr].filetype,
+    config_manager.config.queries[vim.bo[bufnr].filetype] or "textobjects"
+  )
 end
 
 local function print_error(msg)
@@ -45,14 +51,22 @@ end
 ---@param position integer[] The cursor of the expected function signature
 ---@return {range: TextRange, text: string}[]? The range of the arguments in the signature + the text it contains.
 local function get_arguments(node, bufnr, position)
-  local query_function = get_queries()
+  local query_function = get_queries(bufnr)
 
   if query_function == nil then
     print_error("Queries are not available for this filetype")
     return
   end
 
-  while query_function:iter_matches(node, bufnr, nil, nil, { all = true, max_start_depth = 0 })() == nil do
+  while
+    query_function:iter_matches(
+      node,
+      bufnr,
+      nil,
+      nil,
+      { all = true, max_start_depth = 0 }
+    )() == nil
+  do
     node = node:parent()
     if node == nil then
       print_error(
@@ -69,14 +83,25 @@ local function get_arguments(node, bufnr, position)
 
   local arguments = {}
   local ignore = {}
-  for _, match, _ in query_function:iter_matches(node, bufnr, nil, nil, { all = true, max_start_depth = 0 }) do
+  for _, match, _ in
+    query_function:iter_matches(
+      node,
+      bufnr,
+      nil,
+      nil,
+      { all = true, max_start_depth = 0 }
+    )
+  do
     for id, nodes in pairs(match) do
       local capture_name = query_function.captures[id]
 
       for _, matched_node in ipairs(nodes) do
         local range, text = range_text(matched_node, bufnr)
 
-        if (IDENTIFYING_CAPTURES[capture_name] ~= nil) and not inside_range(range, position) then
+        if
+          (IDENTIFYING_CAPTURES[capture_name] ~= nil)
+          and not inside_range(range, position)
+        then
           print_error(
             string.format(
               "Could not find a function at (%d, %d) in the file %s",
@@ -119,7 +144,8 @@ local function get_text_edits(position, changes)
   vim.fn.bufload(position.bufnr)
 
   local pos = position.location
-  local matched_node = ts.get_node({ pos = pos, bufnr = position.bufnr, lang = vim.bo.filetype })
+  local matched_node =
+    ts.get_node({ pos = pos, bufnr = position.bufnr, lang = vim.bo.filetype })
   if matched_node == nil then
     print_error(
       string.format(
@@ -198,14 +224,15 @@ local function update_at_positions(positions, changes)
   end
 end
 
-function M.update_qf_list()
+function M.change_function_via_qf()
   local list = vim.fn.getqflist({ idx = 0, items = true })
   local items = list.items
   local idx = list.idx
   local curr_entry = items[idx]
   local pos = { items[idx].lnum - 1, items[idx].col - 1 }
 
-  local curr_node = ts.get_node({ bufnr = curr_entry.bufnr, pos = pos, lang = vim.bo.filetype })
+  local curr_node =
+    ts.get_node({ bufnr = curr_entry.bufnr, pos = pos, lang = vim.bo.filetype })
   if curr_node ~= nil then
     local arguments = get_arguments(curr_node, curr_entry.bufnr, pos)
     if arguments == nil then
@@ -218,28 +245,44 @@ function M.update_qf_list()
       return { line = i.text, id = index }
     end, arguments)
 
-    ui.open_ui(lines, ts.get_node_text(curr_node, curr_entry.bufnr, {}), function(swapped_lines)
-      local positions = vim
+    ui.open_ui(
+      lines,
+      ts.get_node_text(curr_node, curr_entry.bufnr, {}),
+      function(swapped_lines)
+        local positions = vim
           .iter(items)
           :map(function(qf_entry)
-            return { bufnr = qf_entry.bufnr, location = { qf_entry.lnum - 1, qf_entry.col - 1 } }
+            return {
+              bufnr = qf_entry.bufnr,
+              location = { qf_entry.lnum - 1, qf_entry.col - 1 },
+            }
           end)
           :totable()
 
-      update_at_positions(positions, swapped_lines)
-    end)
+        update_at_positions(positions, swapped_lines)
+      end
+    )
   end
 end
 
-local function make_lsp_request(buf, method, params)
+function M.change_function_via_lsp_references()
   local query_function = get_queries()
+
+  local bufnr = api.nvim_get_current_buf()
+
+  local method = "textDocument/references"
+  local params = {
+    textDocument = { uri = vim.uri_from_bufnr(bufnr) },
+    position = convert_win_cursor_to_position(0),
+    context = { includeDeclaration = true },
+  }
 
   if query_function == nil then
     print_error("Could not find a query for this filetype")
     return
   end
 
-  vim.lsp.buf_request_all(buf, method, params, function(results)
+  vim.lsp.buf_request_all(bufnr, method, params, function(results)
     for _, res in ipairs(results) do
       if res.error then
         print_error("An error occured while fetching references: " .. res.error)
@@ -252,7 +295,7 @@ local function make_lsp_request(buf, method, params)
       return
     end
 
-    local arguments = get_arguments(curr_node, buf, {
+    local arguments = get_arguments(curr_node, bufnr, {
       vim.api.nvim_win_get_cursor(0)[1] - 1,
       vim.api.nvim_win_get_cursor(0)[2],
     })
@@ -266,8 +309,11 @@ local function make_lsp_request(buf, method, params)
       return { line = i.text, id = index }
     end, arguments)
 
-    ui.open_ui(lines, ts.get_node_text(curr_node, buf, {}), function(swaped_lines)
-      local positions = vim
+    ui.open_ui(
+      lines,
+      ts.get_node_text(curr_node, bufnr, {}),
+      function(swaped_lines)
+        local positions = vim
           .iter(results)
           :map(function(res)
             return res.result
@@ -278,23 +324,19 @@ local function make_lsp_request(buf, method, params)
           end)
           :totable()
 
-      update_at_positions(positions, swaped_lines)
-    end)
+        update_at_positions(positions, swaped_lines)
+      end
+    )
   end)
 end
 
---- Change the function variable locations
+---Change the function variable locations
 function M.change_function()
-  local method = "textDocument/references"
-  local params = {
-    textDocument = { uri = vim.uri_from_bufnr(api.nvim_get_current_buf()) },
-    position = convert_win_cursor_to_position(api.nvim_get_current_win()),
-  }
-  params.context = { includeDeclaration = true }
-
-  make_lsp_request(api.nvim_get_current_buf(), method, params)
+  M.change_function_via_lsp_references()
 end
 
+---Setup this plugin for usage.
+---@param opts? ChangeFunctionConfig
 function M.setup(opts)
   config_manager.set_default(opts)
   ui.set_config(config_manager)

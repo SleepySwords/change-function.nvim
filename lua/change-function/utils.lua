@@ -7,7 +7,10 @@ function M.reference_position_to_position(position)
   local bufnr = vim.uri_to_bufnr(position["uri"])
   return {
     bufnr = bufnr,
-    location = { position["range"]["start"]["line"], position["range"]["start"]["character"] },
+    location = {
+      position["range"]["start"]["line"],
+      position["range"]["start"]["character"],
+    },
   }
 end
 
@@ -33,7 +36,9 @@ function M.range_text(node, bufnr)
       character = col2,
     },
   }
-  local buf_text = (vim.api.nvim_buf_get_text(bufnr, row1, col1, row2, col2, {}))
+  local buf_text = (
+    vim.api.nvim_buf_get_text(bufnr, row1, col1, row2, col2, {})
+  )
   local text = table.concat(buf_text, "\n")
   return range, text
 end
