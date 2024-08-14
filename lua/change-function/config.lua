@@ -7,10 +7,17 @@ local mapping_default = {
   confirm = "<enter>",
 }
 
+---@enum QuickFixSource
+local quick_fix_source = {
+  entry = "entry",
+  cursor = "cursor",
+}
+
 ---@class ChangeFunctionConfig
 ---@field queries? table<string, string>
 ---@field nui? fun (node_name: string): NuiPopup
 ---@field mappings? table<MappingName, string>
+---@field quickfix_source? QuickFixSource
 
 local defaults = {
 
@@ -41,6 +48,8 @@ local defaults = {
     }
   end,
 
+  quickfix_source = "entry",
+
   mappings = {
     quit = "q",
     quit2 = "<esc>",
@@ -54,7 +63,5 @@ local config = {}
 function config.set_default(user_defaults)
   config.config = vim.tbl_deep_extend("keep", user_defaults, defaults)
 end
-
-config.set_default({})
 
 return config
