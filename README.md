@@ -49,8 +49,9 @@ quick way to change function arguments, but sacrifices flexibility.
 5. Press enter and confirm
 
 The quickfix list method allows for
-- Much more flexibility, as you can use plugins such as `quicker.nvim` to be
-  able to modify the list and include references that you want to change.
+- Much more flexibility, as you can use existing quickfix workflows and use
+  plugins such as `nvim-bqf`, `quicker.nvim` or `listish.nvim` to be able to
+  modify the list and include references that you want to change.
 - Allows you to be able to see what the functions that will be changed before
   actually running the command.
 
@@ -97,8 +98,12 @@ change_function.setup({
   quickfix_source = "entry",
 })
 
-vim.api.nvim_set_keymap('n', '<leader>cr', '', {
+vim.api.nvim_set_keymap('n', '<leader>crl', '', {
   callback = change_function.change_function,
+})
+
+vim.api.nvim_set_keymap('n', '<leader>crq', '', {
+  callback = change_function.change_function_via_qf,
 })
 ```
 

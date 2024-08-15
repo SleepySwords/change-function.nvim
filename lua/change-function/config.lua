@@ -33,6 +33,7 @@ local defaults = {
     return {
       enter = true,
       focusable = true,
+      relative = "win",
       border = {
         style = "rounded",
         text = {
@@ -51,7 +52,7 @@ local defaults = {
     }
   end,
 
-  quickfix_source = "cursor",
+  quickfix_source = "entry",
 
   mappings = {
     quit = "q",
