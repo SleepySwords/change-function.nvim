@@ -93,7 +93,7 @@ change_function.setup({
     move_up = '<S-k>',
     confirm = '<enter>',
   },
-  -- Specifies whether or not to use the first entry as the arguments for the
+  -- Specifies whether or not to use the selected entry as the arguments for the
   -- swapping window or the function at the cursor.
   quickfix_source = "entry",
 })
