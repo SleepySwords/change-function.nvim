@@ -33,16 +33,15 @@ the other uses the quickfix list as a source of the functions to change.
 This is the default version when running `change_function()`. It allows for a
 quick way to change function arguments, but sacrifices flexibility.
 
-1. Run the `:lua
-   require("change-function").change_function_via_lsp_references()` or `:lua
-   require("change-function").change_function()` command to open up the
+1. Run the `require("change-function").change_function_via_lsp_references()` or
+   `require("change-function").change_function()` command to open up the
    reorganisation window.
 2. Swap whatever arguments you need using the specified mappings.
 3. Press enter and confirm
 ### Using the quickfix list.
 
-1. Add your references using a command, for example `:lua
-   vim.lsp.references({includeDeclaration = true})`
+1. Add your references using a command, for example
+   `vim.lsp.references({includeDeclaration = true})`
 2. Modify the quickfix list with whatever workflow you currently use.
 3. Run the `:lua require("change-function").change_function_via_qf()` command to
    open up the reorganisation window.
@@ -93,7 +92,9 @@ change_function.setup({
     move_up = '<S-k>',
     confirm = '<enter>',
   },
-  quickfix_source = "cursor",
+  -- Specifies whether or not to use the first entry as the arguments for the
+  -- swapping window or the function at the cursor.
+  quickfix_source = "entry",
 })
 
 vim.api.nvim_set_keymap('n', '<leader>cr', '', {
