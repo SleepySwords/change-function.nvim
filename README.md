@@ -24,9 +24,36 @@ Use your favourite package manager to install `change-function.nvim`
 ```
 
 ## Usage
-There is currently a singular function `change_function()` which opens up the
-menu, for example: binding it to a key. You may call setup to customise some
-options with nui and keybindings within `change-function.nvim`.
+There are currently different ways to use this plugin. One automatically using
+LSP references (this is the default when using the `change_function()` function), 
+the other uses the quickfix list as a source of the functions to change.
+
+### Automatically via LSP references.
+
+This is the default version when running `change_function()`. It allows for a
+quick way to change function arguments, but sacrifices flexibility.
+
+1. Run the `:lua
+   require("change-function").change_function_via_lsp_references()` or `:lua
+   require("change-function").change_function()` command to open up the
+   reorganisation window.
+2. Swap whatever arguments you need using the specified mappings.
+3. Press enter and confirm
+### Using the quickfix list.
+
+1. Add your references using a command, for example `:lua
+   vim.lsp.references({includeDeclaration = true})`
+2. Modify the quickfix list with whatever workflow you currently use.
+3. Run the `:lua require("change-function").change_function_via_qf()` command to
+   open up the reorganisation window.
+4. Swap whatever arguments you need using the specified mappings.
+5. Press enter and confirm
+
+The quickfix list method allows for
+- Much more flexibility, as you can use plugins such as `quicker.nvim` to be
+  able to modify the list and include references that you want to change.
+- Allows you to be able to see what the functions that will be changed before
+  actually running the command.
 
 ```lua
 local change_function = require('change-function')
@@ -65,7 +92,8 @@ change_function.setup({
     move_down = '<S-j>',
     move_up = '<S-k>',
     confirm = '<enter>',
-  }
+  },
+  quickfix_source = "cursor",
 })
 
 vim.api.nvim_set_keymap('n', '<leader>cr', '', {

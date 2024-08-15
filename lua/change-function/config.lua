@@ -1,26 +1,29 @@
----@enum MappingName
-local mapping_default = {
-  quit = "q",
-  quit2 = "<esc>",
-  move_down = "<S-j>",
-  move_up = "<S-k>",
-  confirm = "<enter>",
-}
+---@class Mappings
+---@field quit? string
+---@field quit2? string
+---@field move_down? string
+---@field move_up? string
+---@field confirm? string
 
----@enum QuickFixSource
-local quick_fix_source = {
-  entry = "entry",
-  cursor = "cursor",
-}
+---@class InternalMappings
+---@field quit string
+---@field quit2 string
+---@field move_down string
+---@field move_up string
+---@field confirm string
 
 ---@class ChangeFunctionConfig
 ---@field queries? table<string, string>
 ---@field nui? fun (node_name: string): NuiPopup
----@field mappings? table<MappingName, string>
----@field quickfix_source? QuickFixSource
+---@field mappings? Mappings
+---@field quickfix_source? "entry" | "cursor"
 
+---@class InternalChangeFunctionConfig
+---@field queries table<string, string>
+---@field nui fun (node_name: string): NuiPopup
+---@field mappings Mappings
+---@field quickfix_source "entry" | "cursor"
 local defaults = {
-
   queries = {
     rust = "function_params",
     lua = "function_params",
@@ -48,7 +51,7 @@ local defaults = {
     }
   end,
 
-  quickfix_source = "entry",
+  quickfix_source = "cursor",
 
   mappings = {
     quit = "q",
@@ -58,10 +61,15 @@ local defaults = {
     confirm = "<enter>",
   },
 }
-local config = {}
 
-function config.set_default(user_defaults)
-  config.config = vim.tbl_deep_extend("keep", user_defaults, defaults)
+---@class ConfigManager
+---@field config InternalChangeFunctionConfig
+local config_manager = {
+  config = defaults,
+}
+
+function config_manager.set_default(user_defaults)
+  config_manager.config = vim.tbl_deep_extend("keep", user_defaults, defaults)
 end
 
-return config
+return config_manager

@@ -144,8 +144,11 @@ local function get_text_edits(position, changes)
   vim.fn.bufload(position.bufnr)
 
   local pos = position.location
-  local matched_node =
-    ts.get_node({ pos = pos, bufnr = position.bufnr, lang = vim.bo.filetype })
+  local matched_node = ts.get_node({
+    pos = pos,
+    bufnr = position.bufnr,
+    lang = vim.bo[position.bufnr].filetype,
+  })
   if matched_node == nil then
     print_error(
       string.format(
@@ -229,12 +232,34 @@ function M.change_function_via_qf()
   local items = list.items
   local idx = list.idx
   local curr_entry = items[idx]
-  local pos = { items[idx].lnum - 1, items[idx].col - 1 }
 
-  local curr_node =
-    ts.get_node({ bufnr = curr_entry.bufnr, pos = pos, lang = vim.bo.filetype })
+  local position = {}
+  if
+    config_manager.config.quickfix_source == "entry"
+    or vim.bo.filetype == "qf"
+  then
+    position = {
+      bufnr = curr_entry.bufnr,
+      location = { curr_entry.lnum - 1, curr_entry.col - 1 },
+    }
+  else
+    position = {
+      bufnr = vim.api.nvim_get_current_buf(),
+      location = {
+        vim.api.nvim_win_get_cursor(0)[1] - 1,
+        vim.api.nvim_win_get_cursor(0)[2],
+      },
+    }
+  end
+
+  local curr_node = ts.get_node({
+    bufnr = position.bufnr,
+    pos = position.location,
+    lang = vim.bo[position.bufnr].filetype,
+  })
   if curr_node ~= nil then
-    local arguments = get_arguments(curr_node, curr_entry.bufnr, pos)
+    local arguments =
+      get_arguments(curr_node, position.bufnr, position.location)
     if arguments == nil then
       return
     end
@@ -247,7 +272,7 @@ function M.change_function_via_qf()
 
     ui.open_ui(
       lines,
-      ts.get_node_text(curr_node, curr_entry.bufnr, {}),
+      ts.get_node_text(curr_node, position.bufnr, {}),
       function(swapped_lines)
         local positions = vim
           .iter(items)
