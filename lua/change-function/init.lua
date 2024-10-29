@@ -41,6 +41,73 @@ local function get_queries(bufnr)
   )
 end
 
+---Does this node match the query, and, if applicable, is the position
+---inside the range of the identifying capture of this node.
+---
+---This uses max_start_depth of 1, this previously used to make matches
+---not work as expected. This is because it would go to the parent node
+---and the parent node contains the previous function as a `field`. This
+---matches the field and returns without matching the actual function. Now
+---we match based on if we are in range as well (if there exists an
+---identifying capture). If there is no identifying capture, it will do the
+---same behaviour (wrong matching), however, this is better than not matching
+---at all.
+---@param query_function any
+---@param node any
+---@param bufnr any
+---@param position any
+---@return boolean
+local function is_node_valid(query_function, node, bufnr, position)
+  if
+    query_function:iter_matches(
+      node,
+      bufnr,
+      nil,
+      nil,
+      { all = true, max_start_depth = 1 }
+    )() == nil
+  then
+    return false
+  end
+
+  local check_in_range = false
+  for id, _ in pairs(IDENTIFYING_CAPTURES) do
+    if vim.list_contains(query_function.captures, id) then
+      check_in_range = true
+    end
+  end
+
+  if not check_in_range then
+    return true
+  end
+
+  for _, match, _ in
+    query_function:iter_matches(
+      node,
+      bufnr,
+      nil,
+      nil,
+      { all = true, max_start_depth = 1 }
+    )
+  do
+    for id, nodes in pairs(match) do
+      local capture_name = query_function.captures[id]
+
+      for _, matched_node in ipairs(nodes) do
+        local range, _ = range_text(matched_node, bufnr)
+        if
+          (IDENTIFYING_CAPTURES[capture_name] ~= nil)
+          and inside_range(range, position)
+        then
+          return true
+        end
+      end
+    end
+  end
+
+  return false
+end
+
 local function print_error(msg)
   vim.notify("Failed to swap: " .. msg, vim.log.levels.ERROR)
 end
@@ -58,15 +125,7 @@ local function get_arguments(node, bufnr, position)
     return
   end
 
-  while
-    query_function:iter_matches(
-      node,
-      bufnr,
-      nil,
-      nil,
-      { all = true, max_start_depth = 0 }
-    )() == nil
-  do
+  while not is_node_valid(query_function, node, bufnr, position) do
     node = node:parent()
     if node == nil then
       print_error(
@@ -89,7 +148,7 @@ local function get_arguments(node, bufnr, position)
       bufnr,
       nil,
       nil,
-      { all = true, max_start_depth = 0 }
+      { all = true, max_start_depth = 1 }
     )
   do
     for id, nodes in pairs(match) do
@@ -140,7 +199,6 @@ end
 ---@param changes Argument[] The swaps that are required to change
 ---@return {newText: string, range: TextRange}[]?
 local function get_text_edits(position, changes)
-  vim.print(position.bufnr)
   vim.fn.bufload(position.bufnr)
 
   local pos = position.location
@@ -223,7 +281,7 @@ local function update_at_positions(positions, changes)
   end
 
   for k, v in pairs(global_text_edits) do
-    vim.lsp.util.apply_text_edits(v, k, "UTF-8")
+    vim.lsp.util.apply_text_edits(v, k, "utf-16")
   end
 end
 
