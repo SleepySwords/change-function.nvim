@@ -76,10 +76,9 @@ function M.open_ui(lines, node_name, handler)
       { "Confirm", "Cancel" },
       { prompt = "Are you sure?" },
       function(i)
-        if i == "Cancel" then
-          return
+        if i == "Confirm" then
+          handler(lines)
         end
-        handler(lines)
       end
     )
   end, { noremap = true })
