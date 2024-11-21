@@ -14,6 +14,8 @@
 ---wheras the id provides the arguments of the OLD list
 ---@field line string The contents of this particular argument
 ---@field id string The index of this particular argument in all the arguments (before swapping)
+---@field is_addition boolean
+---@field is_deletion boolean
 
 local ui = require("change-function.ui")
 local config_manager = require("change-function.config")
@@ -31,6 +33,9 @@ local M = {}
 IDENTIFYING_CAPTURES = { ["function_name"] = true, ["method_name"] = true }
 ARGUMENT_CAPTURES = { ["parameter.inner"] = true, ["argument.inner"] = true }
 
+---Gets the current query from the
+---@param bufnr? integer The buffer to get the query from
+---@return (vim.treesitter.Query)?
 local function get_queries(bufnr)
   if bufnr == nil then
     bufnr = 0
@@ -52,11 +57,11 @@ end
 ---identifying capture). If there is no identifying capture, it will do the
 ---same behaviour (wrong matching), however, this is better than not matching
 ---at all.
----@param query_function any
----@param node any
----@param bufnr any
----@param position any
----@return boolean
+---@param query_function vim.treesitter.Query The query to check for
+---@param node TSNode The node of the function signature
+---@param bufnr integer The buffer number of the buffer where the node resides.
+---@param position integer[] The cursor of the expected function signature
+---@return boolean valid The node is valid.
 local function is_node_valid(query_function, node, bufnr, position)
   if
     query_function:iter_matches(
@@ -197,8 +202,9 @@ end
 ---Get the text edits that need to be done to change an argument
 ---@param position Position position of where the change should be done
 ---@param changes Argument[] The swaps that are required to change
+---@param to_delete number The number of arguments to be deleted.
 ---@return {newText: string, range: TextRange}[]?
-local function get_text_edits(position, changes)
+local function get_text_edits(position, changes, to_delete)
   vim.fn.bufload(position.bufnr)
 
   local pos = position.location
@@ -224,7 +230,12 @@ local function get_text_edits(position, changes)
     return
   end
 
+  local num_to_add = #vim.tbl_filter(function(e)
+    return e.is_addition
+  end, changes)
+
   local text_edits = {}
+  local to_add = ""
   for i, v in ipairs(changes) do
     -- Don't include textedits that dot not change anything.
     if i ~= v.id then
@@ -239,11 +250,50 @@ local function get_text_edits(position, changes)
         )
         return
       end
-      table.insert(text_edits, {
-        newText = args[v.id].text,
-        range = args[i].range,
-      })
+      local text
+      if v.is_addition then
+        text = v.line
+      else
+        text = args[v.id].text
+      end
+      if #args < i then
+        if v.is_addition then
+          to_add = to_add .. ", " .. text
+        else
+          to_add = to_add .. ", " .. text
+        end
+      else
+        table.insert(text_edits, {
+          newText = text,
+          range = args[i].range,
+        })
+      end
     end
+  end
+
+  if to_delete > num_to_add then
+    local deletion_range = ((to_delete - num_to_add) >= #args)
+        and {
+          start = args[1].range["start"],
+          ["end"] = args[#args].range["end"],
+        }
+      or {
+        start = args[#args - (to_delete - num_to_add)].range["end"],
+        ["end"] = args[#args].range["end"],
+      }
+
+    table.insert(text_edits, {
+      newText = "",
+      range = deletion_range,
+    })
+  else
+    table.insert(text_edits, {
+      newText = to_add,
+      range = {
+        start = args[#args].range["end"],
+        ["end"] = args[#args].range["end"],
+      },
+    })
   end
 
   return text_edits
@@ -254,9 +304,15 @@ end
 --- @param positions Position[]
 --- @param changes Argument[]
 local function update_at_positions(positions, changes)
+  local to_swap = vim.tbl_filter(function(change)
+    return not change.is_deletion
+  end, changes)
+
+  local num_to_delete = #changes - #to_swap
+
   local global_text_edits = {}
   for _, position in ipairs(positions) do
-    local text_edits = get_text_edits(position, changes)
+    local text_edits = get_text_edits(position, to_swap, num_to_delete)
     if text_edits == nil then -- FIXME: add strictness
       return
     end
@@ -285,6 +341,7 @@ local function update_at_positions(positions, changes)
   end
 end
 
+---Changes the function signature using quickfix list to find other signatures
 function M.change_function_via_qf()
   local list = vim.fn.getqflist({ idx = 0, items = true })
   local items = list.items
@@ -325,7 +382,12 @@ function M.change_function_via_qf()
     local index = 0
     local lines = vim.tbl_map(function(i)
       index = index + 1
-      return { line = i.text, id = index }
+      return {
+        line = i.text,
+        id = index,
+        is_deletion = false,
+        is_addition = false,
+      }
     end, arguments)
 
     ui.open_ui(
@@ -348,6 +410,7 @@ function M.change_function_via_qf()
   end
 end
 
+---Changes the function signature using lsp references to find other signatures
 function M.change_function_via_lsp_references()
   local query_function = get_queries()
 

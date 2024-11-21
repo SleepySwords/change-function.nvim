@@ -1,13 +1,11 @@
 ---@class Mappings
----@field quit? string
----@field quit2? string
+---@field quit? string | string[]
 ---@field move_down? string
 ---@field move_up? string
 ---@field confirm? string
 
 ---@class InternalMappings
----@field quit string
----@field quit2 string
+---@field quit string | string[]
 ---@field move_down string
 ---@field move_up string
 ---@field confirm string
@@ -35,6 +33,7 @@ local defaults = {
       enter = true,
       focusable = true,
       relative = "win",
+      zindex = 50,
       border = {
         style = "rounded",
         text = {
@@ -56,11 +55,12 @@ local defaults = {
   quickfix_source = "entry",
 
   mappings = {
-    quit = "q",
-    quit2 = "<esc>",
+    quit = { "q", "<Esc>" },
     move_down = "<S-j>",
     move_up = "<S-k>",
     confirm = "<enter>",
+    delete_argument = "x",
+    add_argument = "i",
   },
 }
 

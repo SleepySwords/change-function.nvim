@@ -1,21 +1,34 @@
 local Popup = require("nui.popup")
 local event = require("nui.utils.autocmd").event
+local Layout = require("nui.layout")
+local Input = require("nui.input")
 
 local M = {}
 
-local function update_lines(bufnr, lines)
+---Update the line for the UI
+---@param bufnr number The buffer to update the UI.
+---@param lines Argument[] The lines to print.
+---@param old_number? integer The number of previous lines before the update
+local function update_lines(bufnr, lines, old_number)
+  if old_number == nil then
+    old_number = #lines
+  end
   vim.api.nvim_set_option_value("modifiable", true, { buf = bufnr })
   vim.api.nvim_buf_set_lines(
     bufnr,
     0,
-    #lines,
+    old_number,
     false,
     vim.tbl_map(function(i)
       local new_line_char = string.find(i.line, "\n")
       if new_line_char == nil then
         new_line_char = 0
       end
-      return i.line:sub(1, new_line_char - 1)
+      if i.is_deletion then
+        return i.line:sub(1, new_line_char - 1) .. " [Marked for deletion]"
+      else
+        return i.line:sub(1, new_line_char - 1)
+      end
     end, lines)
   )
   vim.api.nvim_set_option_value("modifiable", false, { buf = bufnr })
@@ -41,6 +54,20 @@ function M.set_config(config_manager)
   M.config = config_manager.config
 end
 
+---Add the mappings for this popup window.
+---@param popup NuiPopup
+---@param mappings string | string[]
+---@param handler string|fun():nil
+local function add_mapping(popup, mappings, handler)
+  if type(mappings) == "table" then
+    for _, bind in pairs(mappings) do
+      popup:map("n", bind, handler, { noremap = true })
+    end
+  else
+    popup:map("n", mappings, handler, { noremap = true })
+  end
+end
+
 ---Open the UI to swap arguments
 ---@param lines Argument[] The arguments that will be displayed in this UI
 ---@param node_name string The title of this user interface
@@ -54,23 +81,56 @@ function M.open_ui(lines, node_name, handler)
     popup:unmount()
   end)
 
-  popup:map("n", M.config.mappings.move_down, function()
-    move(popup.bufnr, lines, #lines, 1)
-  end, { noremap = true })
+  add_mapping(popup, M.config.mappings.delete_argument, function()
+    local row, _ = unpack(vim.api.nvim_win_get_cursor(0))
+    local previous_no_lines = #lines
 
-  popup:map("n", M.config.mappings.move_up, function()
+    -- FIXME: All argument params should have a deleted field.
+    if lines[row].is_addition then
+      table.remove(lines, row)
+    else
+      if lines[row].is_deletion == nil then
+        lines[row].is_deletion = true
+      else
+        lines[row].is_deletion = not lines[row].is_deletion
+      end
+    end
+
+    update_lines(popup.bufnr, lines, previous_no_lines)
+  end)
+
+  add_mapping(popup, M.config.mappings.add_argument, function()
+
+    vim.ui.input({
+      prompt = "What argument to add",
+    }, function(name)
+      if name ~= nil then
+        table.insert(lines, {
+          line = name,
+          is_addition = true,
+          is_deletion = false,
+          id = -1,
+        })
+
+        update_lines(popup.bufnr, lines)
+      end
+    end)
+  end)
+
+
+  add_mapping(popup, M.config.mappings.move_up, function()
     move(popup.bufnr, lines, 1, -1)
-  end, { noremap = true })
+  end)
 
-  popup:map("n", M.config.mappings.quit, function()
+  add_mapping(popup, M.config.mappings.move_down, function()
+    move(popup.bufnr, lines, #lines, 1)
+  end)
+
+  add_mapping(popup, M.config.mappings.quit, function()
     vim.cmd([[q]])
-  end, { noremap = true })
+  end)
 
-  popup:map("n", M.config.mappings.quit2, function()
-    vim.cmd([[q]])
-  end, { noremap = true })
-
-  popup:map("n", M.config.mappings.confirm, function()
+  add_mapping(popup, M.config.mappings.confirm, function()
     vim.cmd([[q]])
     vim.ui.select(
       { "Confirm", "Cancel" },
@@ -81,7 +141,7 @@ function M.open_ui(lines, node_name, handler)
         end
       end
     )
-  end, { noremap = true })
+  end)
 
   update_lines(popup.bufnr, lines)
 end
