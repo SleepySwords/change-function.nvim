@@ -122,7 +122,7 @@ end
 ---@param bufnr integer The buffer number of the buffer where the node resides.
 ---@param position integer[] The cursor of the expected function signature
 ---@return {range: TextRange, text: string}[]? The range of the arguments in the signature + the text it contains.
-local function get_arguments(node, bufnr, position)
+local function get_signature_info(node, bufnr, position)
   local query_function = get_queries(bufnr)
 
   if query_function == nil then
@@ -145,6 +145,8 @@ local function get_arguments(node, bufnr, position)
     end
   end
 
+  -- By default we will assume all treesitter matches are function calls (unless proven otherwise)
+  local is_call = true
   local arguments = {}
   local ignore = {}
   for _, match, _ in
@@ -161,6 +163,10 @@ local function get_arguments(node, bufnr, position)
 
       for _, matched_node in ipairs(nodes) do
         local range, text = range_text(matched_node, bufnr)
+
+        if capture_name == "function.outer" then
+          is_call = false
+        end
 
         if
           (IDENTIFYING_CAPTURES[capture_name] ~= nil)
@@ -196,15 +202,16 @@ local function get_arguments(node, bufnr, position)
     end, arguments)
   end
 
+  vim.print(arguments, is_call)
+
   return arguments
 end
 
 ---Get the text edits that need to be done to change an argument
 ---@param position Position position of where the change should be done
 ---@param changes Argument[] The swaps that are required to change
----@param to_delete number The number of arguments to be deleted.
 ---@return {newText: string, range: TextRange}[]?
-local function get_text_edits(position, changes, to_delete)
+local function get_text_edits(position, changes)
   vim.fn.bufload(position.bufnr)
 
   local pos = position.location
@@ -225,18 +232,24 @@ local function get_text_edits(position, changes, to_delete)
     return
   end
 
-  local args = get_arguments(matched_node, position.bufnr, pos)
+  local args = get_signature_info(matched_node, position.bufnr, pos)
   if args == nil then
     return
   end
 
-  local num_to_add = #vim.tbl_filter(function(e)
-    return e.is_addition
+  local new_args = vim.tbl_filter(function(change)
+    return not change.is_deletion
   end, changes)
+
+  local num_deletions = #changes - #new_args
+
+  local num_additions = #vim.tbl_filter(function(e)
+    return e.is_addition
+  end, new_args)
 
   local text_edits = {}
   local to_add = ""
-  for i, v in ipairs(changes) do
+  for i, v in ipairs(new_args) do
     -- Don't include textedits that dot not change anything.
     if i ~= v.id then
       if #args < v.id then
@@ -271,14 +284,14 @@ local function get_text_edits(position, changes, to_delete)
     end
   end
 
-  if to_delete > num_to_add then
-    local deletion_range = ((to_delete - num_to_add) >= #args)
+  if num_deletions > num_additions then
+    local deletion_range = ((num_deletions - num_additions) >= #args)
         and {
           start = args[1].range["start"],
           ["end"] = args[#args].range["end"],
         }
       or {
-        start = args[#args - (to_delete - num_to_add)].range["end"],
+        start = args[#args - (num_deletions - num_additions)].range["end"],
         ["end"] = args[#args].range["end"],
       }
 
@@ -304,16 +317,10 @@ end
 --- @param positions Position[]
 --- @param changes Argument[]
 local function update_at_positions(positions, changes)
-  local to_swap = vim.tbl_filter(function(change)
-    return not change.is_deletion
-  end, changes)
-
-  local num_to_delete = #changes - #to_swap
-
   local global_text_edits = {}
   for _, position in ipairs(positions) do
-    local text_edits = get_text_edits(position, to_swap, num_to_delete)
-    if text_edits == nil then -- FIXME: add strictness
+    local text_edits = get_text_edits(position, changes)
+    if text_edits == nil then -- FIXME: add no strictness
       return
     end
     if #text_edits == 0 then
@@ -374,7 +381,7 @@ function M.change_function_via_qf()
   })
   if curr_node ~= nil then
     local arguments =
-      get_arguments(curr_node, position.bufnr, position.location)
+      get_signature_info(curr_node, position.bufnr, position.location)
     if arguments == nil then
       return
     end
@@ -441,7 +448,7 @@ function M.change_function_via_lsp_references()
       return
     end
 
-    local arguments = get_arguments(curr_node, bufnr, {
+    local arguments = get_signature_info(curr_node, bufnr, {
       vim.api.nvim_win_get_cursor(0)[1] - 1,
       vim.api.nvim_win_get_cursor(0)[2],
     })

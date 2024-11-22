@@ -1,23 +1,21 @@
 local Popup = require("nui.popup")
 local event = require("nui.utils.autocmd").event
-local Layout = require("nui.layout")
-local Input = require("nui.input")
 
 local M = {}
 
 ---Update the line for the UI
 ---@param bufnr number The buffer to update the UI.
 ---@param lines Argument[] The lines to print.
----@param old_number? integer The number of previous lines before the update
-local function update_lines(bufnr, lines, old_number)
-  if old_number == nil then
-    old_number = #lines
+---@param num_lines_update? integer The number of lines to update in the menu
+local function update_lines(bufnr, lines, num_lines_update)
+  if num_lines_update == nil then
+    num_lines_update = #lines
   end
   vim.api.nvim_set_option_value("modifiable", true, { buf = bufnr })
   vim.api.nvim_buf_set_lines(
     bufnr,
     0,
-    old_number,
+    num_lines_update,
     false,
     vim.tbl_map(function(i)
       local new_line_char = string.find(i.line, "\n")
@@ -83,7 +81,7 @@ function M.open_ui(lines, node_name, handler)
 
   add_mapping(popup, M.config.mappings.delete_argument, function()
     local row, _ = unpack(vim.api.nvim_win_get_cursor(0))
-    local previous_no_lines = #lines
+    local previous_num_lines = #lines
 
     -- FIXME: All argument params should have a deleted field.
     if lines[row].is_addition then
@@ -96,11 +94,10 @@ function M.open_ui(lines, node_name, handler)
       end
     end
 
-    update_lines(popup.bufnr, lines, previous_no_lines)
+    update_lines(popup.bufnr, lines, previous_num_lines)
   end)
 
   add_mapping(popup, M.config.mappings.add_argument, function()
-
     vim.ui.input({
       prompt = "What argument to add",
     }, function(name)
@@ -116,7 +113,6 @@ function M.open_ui(lines, node_name, handler)
       end
     end)
   end)
-
 
   add_mapping(popup, M.config.mappings.move_up, function()
     move(popup.bufnr, lines, 1, -1)
