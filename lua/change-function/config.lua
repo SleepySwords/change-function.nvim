@@ -1,14 +1,16 @@
+local _ = require("nui.popup")
+
 ---@class Mappings
 ---@field quit? string | string[]
----@field move_down? string
----@field move_up? string
----@field confirm? string
+---@field move_down? string | string[]
+---@field move_up? string | string[]
+---@field confirm? string | string[]
 
 ---@class InternalMappings
 ---@field quit string | string[]
----@field move_down string
----@field move_up string
----@field confirm string
+---@field move_down string | string[]
+---@field move_up string | string[]
+---@field confirm string | string[]
 
 ---@class ChangeFunctionConfig
 ---@field queries? table<string, string>
@@ -16,14 +18,25 @@
 ---@field mappings? Mappings
 ---@field quickfix_source? "entry" | "cursor"
 
+-- FIXME: This is a very long name
+
+---@class LanguageOptions
+---@field query_file string
+---@field different_argument boolean
+---@field argument_seperator? string
+
 ---@class InternalChangeFunctionConfig
----@field queries table<string, string>
+---@field languages table<string, string | LanguageOptions>
 ---@field nui fun (node_name: string): NuiPopup
 ---@field mappings Mappings
 ---@field quickfix_source "entry" | "cursor"
 local defaults = {
-  queries = {
-    rust = "function_params",
+  languages = {
+    rust = {
+      query_file = "function_params",
+      different_argument = false,
+      argument_seperator = ", ",
+    },
     lua = "function_params",
     cpp = "function_params",
   },

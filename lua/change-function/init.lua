@@ -13,6 +13,7 @@
 ---@class Argument Note: the `Argument[]` indicates the order of the NEW arguments,
 ---wheras the id provides the arguments of the OLD list
 ---@field line string The contents of this particular argument
+---@field declaration string? If this is an addition, what should the declaration be called
 ---@field id string The index of this particular argument in all the arguments (before swapping)
 ---@field is_addition boolean
 ---@field is_deletion boolean
@@ -37,13 +38,18 @@ ARGUMENT_CAPTURES = { ["parameter.inner"] = true, ["argument.inner"] = true }
 ---@param bufnr? integer The buffer to get the query from
 ---@return (vim.treesitter.Query)?
 local function get_queries(bufnr)
-  if bufnr == nil then
-    bufnr = 0
+  bufnr = bufnr or 0
+
+  local config = config_manager.config.languages[vim.bo[bufnr].filetype]
+
+  local query
+  if type(config) == "table" then
+    query = config.query_file
+  elseif type(config) == "string" then
+    query = config
   end
-  return ts.query.get(
-    vim.bo[bufnr].filetype,
-    config_manager.config.queries[vim.bo[bufnr].filetype] or "textobjects"
-  )
+
+  return ts.query.get(vim.bo[bufnr].filetype, query or "textobjects")
 end
 
 ---Does this node match the query, and, if applicable, is the position
@@ -117,11 +123,15 @@ local function print_error(msg)
   vim.notify("Failed to swap: " .. msg, vim.log.levels.ERROR)
 end
 
+---@class SignatureInfo
+---@field arguments {range: TextRange, text: string}[] The arguments and the text of those arguments
+---@field is_call boolean Whether or not this signature is a function call or a function signature
+
 ---Get the parameters/arguments from the function signature.
 ---@param node TSNode The node of the function signature
 ---@param bufnr integer The buffer number of the buffer where the node resides.
 ---@param position integer[] The cursor of the expected function signature
----@return {range: TextRange, text: string}[]? The range of the arguments in the signature + the text it contains.
+---@return SignatureInfo? info The range of the arguments in the signature + the text it contains.
 local function get_signature_info(node, bufnr, position)
   local query_function = get_queries(bufnr)
 
@@ -202,9 +212,10 @@ local function get_signature_info(node, bufnr, position)
     end, arguments)
   end
 
-  vim.print(arguments, is_call)
-
-  return arguments
+  return {
+    arguments = arguments,
+    is_call = is_call,
+  }
 end
 
 ---Get the text edits that need to be done to change an argument
@@ -232,10 +243,12 @@ local function get_text_edits(position, changes)
     return
   end
 
-  local args = get_signature_info(matched_node, position.bufnr, pos)
-  if args == nil then
+  local signature_info = get_signature_info(matched_node, position.bufnr, pos)
+  if signature_info == nil then
     return
   end
+
+  local args = signature_info.arguments
 
   local new_args = vim.tbl_filter(function(change)
     return not change.is_deletion
@@ -265,7 +278,11 @@ local function get_text_edits(position, changes)
       end
       local text
       if v.is_addition then
-        text = v.line
+        if signature_info.is_call then
+          text = v.line
+        else
+          text = v.declaration or v.line
+        end
       else
         text = args[v.id].text
       end
@@ -381,7 +398,7 @@ function M.change_function_via_qf()
   })
   if curr_node ~= nil then
     local arguments =
-      get_signature_info(curr_node, position.bufnr, position.location)
+      get_signature_info(curr_node, position.bufnr, position.location).arguments
     if arguments == nil then
       return
     end
@@ -451,7 +468,7 @@ function M.change_function_via_lsp_references()
     local arguments = get_signature_info(curr_node, bufnr, {
       vim.api.nvim_win_get_cursor(0)[1] - 1,
       vim.api.nvim_win_get_cursor(0)[2],
-    })
+    }).arguments
     if arguments == nil then
       return
     end

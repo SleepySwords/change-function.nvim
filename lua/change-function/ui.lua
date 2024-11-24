@@ -99,18 +99,23 @@ function M.open_ui(lines, node_name, handler)
 
   add_mapping(popup, M.config.mappings.add_argument, function()
     vim.ui.input({
-      prompt = "What argument to add",
-    }, function(name)
-      if name ~= nil then
-        table.insert(lines, {
-          line = name,
-          is_addition = true,
-          is_deletion = false,
-          id = -1,
-        })
+      prompt = "What argument to add to the function signature",
+    }, function(signature)
+      vim.ui.input({
+        prompt = "What default value for the argumet",
+      }, function(default_value)
+        if default_value ~= nil then
+          table.insert(lines, {
+            line = default_value,
+            declaration = signature,
+            is_addition = true,
+            is_deletion = false,
+            id = -1,
+          })
 
-        update_lines(popup.bufnr, lines)
-      end
+          update_lines(popup.bufnr, lines)
+        end
+      end)
     end)
   end)
 
