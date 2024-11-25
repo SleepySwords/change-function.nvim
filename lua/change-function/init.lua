@@ -10,9 +10,10 @@
 ---@field bufnr integer
 ---@field location integer[]
 
----@class Argument Note: the `Argument[]` indicates the order of the NEW arguments,
+---@class Change Note: the `Change[]` indicates the order of the NEW arguments,
 ---wheras the id provides the arguments of the OLD list
----@field line string The contents of this particular argument
+---@field display_line string The contents of this particular argument
+---@field default_call string? If this is an addition, what should the default call value be called
 ---@field declaration string? If this is an addition, what should the declaration be called
 ---@field id string The index of this particular argument in all the arguments (before swapping)
 ---@field is_addition boolean
@@ -50,6 +51,21 @@ local function get_queries(bufnr)
   end
 
   return ts.query.get(vim.bo[bufnr].filetype, query or "textobjects")
+end
+
+---Gets the current query from the
+---@param bufnr? integer The buffer to get the query from
+---@return string?
+local function get_argument_seperator(bufnr)
+  bufnr = bufnr or 0
+
+  local config = config_manager.config.languages[vim.bo[bufnr].filetype]
+
+  if type(config) == "table" then
+    return config.argument_seperator
+  elseif type(config) == "string" then
+    return
+  end
 end
 
 ---Does this node match the query, and, if applicable, is the position
@@ -220,12 +236,13 @@ end
 
 ---Get the text edits that need to be done to change an argument
 ---@param position Position position of where the change should be done
----@param changes Argument[] The swaps that are required to change
+---@param changes Change[] The swaps that are required to change
 ---@return {newText: string, range: TextRange}[]?
 local function get_text_edits(position, changes)
   vim.fn.bufload(position.bufnr)
 
   local pos = position.location
+  vim.treesitter.get_parser(position.bufnr):parse()
   local matched_node = ts.get_node({
     pos = pos,
     bufnr = position.bufnr,
@@ -279,19 +296,25 @@ local function get_text_edits(position, changes)
       local text
       if v.is_addition then
         if signature_info.is_call then
-          text = v.line
+          text = v.default_call or v.display_line
         else
-          text = v.declaration or v.line
+          text = v.declaration or v.display_line
         end
       else
         text = args[v.id].text
       end
+      local argument_seperator = get_argument_seperator(position.bufnr)
+      if argument_seperator == nil then
+        print_error(
+          string.format(
+            "Cannot add an argument as there is no argument seperator for the language %s",
+            vim.bo[position.bufnr].filetype
+          )
+        )
+        return
+      end
       if #args < i then
-        if v.is_addition then
-          to_add = to_add .. ", " .. text
-        else
-          to_add = to_add .. ", " .. text
-        end
+        to_add = to_add .. argument_seperator .. text
       else
         table.insert(text_edits, {
           newText = text,
@@ -332,7 +355,7 @@ end
 --- Updates the function declaration and calls at the position by applying text edits
 --- according to the changes
 --- @param positions Position[]
---- @param changes Argument[]
+--- @param changes Change[]
 local function update_at_positions(positions, changes)
   local global_text_edits = {}
   for _, position in ipairs(positions) do
@@ -364,6 +387,8 @@ local function update_at_positions(positions, changes)
     vim.lsp.util.apply_text_edits(v, k, "utf-16")
   end
 end
+
+---FIXME: below can be refactored probably
 
 ---Changes the function signature using quickfix list to find other signatures
 function M.change_function_via_qf()
@@ -407,7 +432,7 @@ function M.change_function_via_qf()
     local lines = vim.tbl_map(function(i)
       index = index + 1
       return {
-        line = i.text,
+        display_line = i.text,
         id = index,
         is_deletion = false,
         is_addition = false,
@@ -476,13 +501,18 @@ function M.change_function_via_lsp_references()
     local index = 0
     local lines = vim.tbl_map(function(i)
       index = index + 1
-      return { line = i.text, id = index }
+      return {
+        display_line = i.text,
+        id = index,
+        is_deletion = false,
+        is_addition = false,
+      }
     end, arguments)
 
     ui.open_ui(
       lines,
       ts.get_node_text(curr_node, bufnr, {}),
-      function(swaped_lines)
+      function(swapped_lines)
         local positions = vim
           .iter(results)
           :map(function(res)
@@ -494,7 +524,7 @@ function M.change_function_via_lsp_references()
           end)
           :totable()
 
-        update_at_positions(positions, swaped_lines)
+        update_at_positions(positions, swapped_lines)
       end
     )
   end)
