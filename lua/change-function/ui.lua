@@ -3,7 +3,7 @@ local event = require("nui.utils.autocmd").event
 
 local M = {}
 
-local function update_lines(bufnr, lines)
+local function update_lines(bufnr, lines, filetype)
   vim.api.nvim_set_option_value("modifiable", true, { buf = bufnr })
   vim.api.nvim_buf_set_lines(
     bufnr,
@@ -19,6 +19,7 @@ local function update_lines(bufnr, lines)
     end, lines)
   )
   vim.api.nvim_set_option_value("modifiable", false, { buf = bufnr })
+  vim.o.filetype = filetype
 end
 
 local function move(bufnr, lines, max_col, offset)
@@ -44,8 +45,9 @@ end
 ---Open the UI to swap arguments
 ---@param lines Argument[] The arguments that will be displayed in this UI
 ---@param node_name string The title of this user interface
+---@param filetype string Filetype of the current file
 ---@param handler fun(swapped_args: Argument[])
-function M.open_ui(lines, node_name, handler)
+function M.open_ui(lines, node_name, filetype, handler)
   local popup = Popup(M.config.nui(node_name))
 
   popup:mount()
@@ -83,7 +85,7 @@ function M.open_ui(lines, node_name, handler)
     )
   end, { noremap = true })
 
-  update_lines(popup.bufnr, lines)
+  update_lines(popup.bufnr, lines, filetype)
 end
 
 return M
