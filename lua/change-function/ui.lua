@@ -19,7 +19,15 @@ local function update_lines(bufnr, lines, filetype)
     end, lines)
   )
   vim.api.nvim_set_option_value("modifiable", false, { buf = bufnr })
-  vim.o.filetype = filetype
+
+  local disable_syntax_highlight = M.config.ui.disable_syntax_highlight
+
+  if type(disable_syntax_highlight) == 'table'
+      and not vim.list_contains(disable_syntax_highlight, filetype)
+      or not disable_syntax_highlight
+  then
+    vim.o.filetype = filetype
+  end
 end
 
 local function move(bufnr, lines, max_col, offset)
