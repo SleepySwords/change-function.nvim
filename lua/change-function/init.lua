@@ -421,42 +421,44 @@ function M.change_function_via_qf()
     pos = position.location,
     lang = vim.bo[position.bufnr].filetype,
   })
-  if curr_node ~= nil then
-    local arguments =
-      get_signature_info(curr_node, position.bufnr, position.location).arguments
-    if arguments == nil then
-      return
-    end
-
-    local index = 0
-    local lines = vim.tbl_map(function(i)
-      index = index + 1
-      return {
-        display_line = i.text,
-        id = index,
-        is_deletion = false,
-        is_addition = false,
-      }
-    end, arguments)
-
-    ui.open_ui(
-      lines,
-      ts.get_node_text(curr_node, position.bufnr, {}),
-      function(swapped_lines)
-        local positions = vim
-          .iter(items)
-          :map(function(qf_entry)
-            return {
-              bufnr = qf_entry.bufnr,
-              location = { qf_entry.lnum - 1, qf_entry.col - 1 },
-            }
-          end)
-          :totable()
-
-        update_at_positions(positions, swapped_lines)
-      end
-    )
+  if curr_node == nil then
+    return
   end
+
+  local arguments =
+    get_signature_info(curr_node, position.bufnr, position.location).arguments
+  if arguments == nil then
+    return
+  end
+
+  local index = 0
+  local lines = vim.tbl_map(function(i)
+    index = index + 1
+    return {
+      display_line = i.text,
+      id = index,
+      is_deletion = false,
+      is_addition = false,
+    }
+  end, arguments)
+
+  ui.open_ui(
+    lines,
+    ts.get_node_text(curr_node, position.bufnr, {}),
+    function(swapped_lines)
+      local positions = vim
+        .iter(items)
+        :map(function(qf_entry)
+          return {
+            bufnr = qf_entry.bufnr,
+            location = { qf_entry.lnum - 1, qf_entry.col - 1 },
+          }
+        end)
+        :totable()
+
+      update_at_positions(positions, swapped_lines)
+    end
+  )
 end
 
 ---Changes the function signature using lsp references to find other signatures
