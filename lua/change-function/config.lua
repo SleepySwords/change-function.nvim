@@ -15,6 +15,7 @@ local _ = require("nui.popup")
 ---@class ChangeFunctionConfig
 ---@field queries? table<string, string>
 ---@field nui? fun (node_name: string): NuiPopup
+---@field ui? ChangeFunctionUiConfig
 ---@field mappings? Mappings
 ---@field quickfix_source? "entry" | "cursor"
 
@@ -25,9 +26,13 @@ local _ = require("nui.popup")
 ---@field different_argument boolean
 ---@field argument_seperator? string
 
+---@class ChangeFunctionUiConfig
+---@field disable_syntax_highlight string[] | boolean Table of filetypes to not syntax highlight. If `true`, disable syntax highlighting all filetypes. If `false`, enable syntax highlighting for all.
+
 ---@class InternalChangeFunctionConfig
 ---@field languages table<string, string | LanguageOptions>
 ---@field nui fun (node_name: string): NuiPopup
+---@field ui ChangeFunctionUiConfig
 ---@field mappings Mappings
 ---@field quickfix_source "entry" | "cursor"
 local defaults = {
@@ -64,6 +69,10 @@ local defaults = {
       },
     }
   end,
+
+  ui = {
+    disable_syntax_highlight = false,
+  },
 
   quickfix_source = "entry",
 

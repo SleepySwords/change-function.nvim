@@ -7,10 +7,11 @@ local M = {}
 ---@param bufnr number The buffer to update the UI.
 ---@param lines Change[] The lines to print.
 ---@param num_lines_update? integer The number of lines to update in the menu
-local function update_lines(bufnr, lines, num_lines_update)
+local function update_lines(bufnr, lines, filetype, num_lines_update)
   if num_lines_update == nil then
     num_lines_update = #lines
   end
+
   vim.api.nvim_set_option_value("modifiable", true, { buf = bufnr })
   vim.api.nvim_buf_set_lines(
     bufnr,
@@ -30,6 +31,15 @@ local function update_lines(bufnr, lines, num_lines_update)
     end, lines)
   )
   vim.api.nvim_set_option_value("modifiable", false, { buf = bufnr })
+
+  local disable_syntax_highlight = M.config.ui.disable_syntax_highlight
+
+  if type(disable_syntax_highlight) == 'table'
+      and not vim.list_contains(disable_syntax_highlight, filetype)
+      or not disable_syntax_highlight
+  then
+    vim.o.filetype = filetype
+  end
 end
 
 local function move(bufnr, lines, max_col, offset)
@@ -69,8 +79,9 @@ end
 ---Open the UI to swap arguments
 ---@param changes Change[] The arguments that will be displayed in this UI
 ---@param node_name string The title of this user interface
+---@param filetype string Filetype of the current file
 ---@param handler fun(swapped_args: Change[])
-function M.open_ui(changes, node_name, handler)
+function M.open_ui(changes, node_name, filetype, handler)
   local popup = Popup(M.config.nui(node_name))
 
   popup:mount()
@@ -145,7 +156,7 @@ function M.open_ui(changes, node_name, handler)
     )
   end)
 
-  update_lines(popup.bufnr, changes)
+  update_lines(popup.bufnr, changes, filetype)
 end
 
 return M

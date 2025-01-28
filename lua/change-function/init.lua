@@ -445,6 +445,7 @@ function M.change_function_via_qf()
   ui.open_ui(
     lines,
     ts.get_node_text(curr_node, position.bufnr, {}),
+    vim.o.filetype,
     function(swapped_lines)
       local positions = vim
         .iter(items)
@@ -514,6 +515,7 @@ function M.change_function_via_lsp_references()
     ui.open_ui(
       lines,
       ts.get_node_text(curr_node, bufnr, {}),
+      vim.o.filetype,
       function(swapped_lines)
         local positions = vim
           .iter(results)
