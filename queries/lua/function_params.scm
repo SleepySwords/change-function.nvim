@@ -3,7 +3,7 @@
   (arguments
     (_) @parameter.inner
   )
-)
+) @method.outer
 
 (function_call
   name: (_
@@ -12,14 +12,14 @@
   (arguments
     (_) @parameter.inner
   )
-)
+) @method.outer
 
 (function_declaration
   name: (identifier) @function_name
   parameters: (parameters
       (_) @parameter.inner
     )
-  )
+  ) @function.outer
 
 (function_declaration
   name: (_
@@ -28,4 +28,4 @@
   parameters: (parameters
       (_) @parameter.inner
     )
-  )
+  ) @function.outer

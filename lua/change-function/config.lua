@@ -42,7 +42,11 @@ local defaults = {
       different_argument = false,
       argument_seperator = ", ",
     },
-    lua = "function_params",
+    lua = {
+      query_file = "function_params",
+      argument_seperator = ", ",
+      different_argument = false,
+    },
     cpp = "function_params",
   },
 

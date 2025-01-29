@@ -340,6 +340,13 @@ local function get_text_edits(position, changes)
       range = deletion_range,
     })
   else
+    if #args == 0 then
+      -- FIXME: There is no parantheses match so we cannot get the start of an argument..
+      print_error(
+        "For technical reasons, change function requires at least one argument"
+      )
+      return text_edits
+    end
     table.insert(text_edits, {
       newText = to_add,
       range = {
@@ -388,7 +395,43 @@ local function update_at_positions(positions, changes)
   end
 end
 
----FIXME: below can be refactored probably
+local function change_function_internal(bufnr, location, positions)
+  local node = ts.get_node({
+    bufnr = bufnr,
+    pos = location,
+    lang = vim.bo[bufnr].filetype,
+  })
+  if node == nil then
+    return
+  end
+
+  local signature_info = get_signature_info(node, bufnr, location)
+  if signature_info == nil then
+    return
+  end
+
+  local arguments = signature_info.arguments
+
+  local index = 0
+  local lines = vim.tbl_map(function(i)
+    index = index + 1
+    return {
+      display_line = i.text,
+      id = index,
+      is_deletion = false,
+      is_addition = false,
+    }
+  end, arguments)
+
+  ui.open_ui(
+    lines,
+    ts.get_node_text(node, bufnr, {}),
+    vim.o.filetype,
+    function(swapped_lines)
+      update_at_positions(positions, swapped_lines)
+    end
+  )
+end
 
 ---Changes the function signature using quickfix list to find other signatures
 function M.change_function_via_qf()
@@ -416,50 +459,17 @@ function M.change_function_via_qf()
     }
   end
 
-  local curr_node = ts.get_node({
-    bufnr = position.bufnr,
-    pos = position.location,
-    lang = vim.bo[position.bufnr].filetype,
-  })
-  if curr_node == nil then
-    return
-  end
+  local positions = vim
+    .iter(items)
+    :map(function(qf_entry)
+      return {
+        bufnr = qf_entry.bufnr,
+        location = { qf_entry.lnum - 1, qf_entry.col - 1 },
+      }
+    end)
+    :totable()
 
-  local arguments =
-    get_signature_info(curr_node, position.bufnr, position.location).arguments
-  if arguments == nil then
-    return
-  end
-
-  local index = 0
-  local lines = vim.tbl_map(function(i)
-    index = index + 1
-    return {
-      display_line = i.text,
-      id = index,
-      is_deletion = false,
-      is_addition = false,
-    }
-  end, arguments)
-
-  ui.open_ui(
-    lines,
-    ts.get_node_text(curr_node, position.bufnr, {}),
-    vim.o.filetype,
-    function(swapped_lines)
-      local positions = vim
-        .iter(items)
-        :map(function(qf_entry)
-          return {
-            bufnr = qf_entry.bufnr,
-            location = { qf_entry.lnum - 1, qf_entry.col - 1 },
-          }
-        end)
-        :totable()
-
-      update_at_positions(positions, swapped_lines)
-    end
-  )
+  change_function_internal(position.bufnr, position.location, positions)
 end
 
 ---Changes the function signature using lsp references to find other signatures
@@ -488,49 +498,23 @@ function M.change_function_via_lsp_references()
       end
     end
 
-    local curr_node = ts.get_node()
-    if curr_node == nil then
-      return
-    end
+    local positions = vim
+      .iter(results)
+      :map(function(res)
+        return res.result
+      end)
+      :flatten()
+      :map(function(location)
+        return reference_position_to_position(location)
+      end)
+      :totable()
 
-    local arguments = get_signature_info(curr_node, bufnr, {
+    local cursor_pos = {
       vim.api.nvim_win_get_cursor(0)[1] - 1,
       vim.api.nvim_win_get_cursor(0)[2],
-    }).arguments
-    if arguments == nil then
-      return
-    end
+    }
 
-    local index = 0
-    local lines = vim.tbl_map(function(i)
-      index = index + 1
-      return {
-        display_line = i.text,
-        id = index,
-        is_deletion = false,
-        is_addition = false,
-      }
-    end, arguments)
-
-    ui.open_ui(
-      lines,
-      ts.get_node_text(curr_node, bufnr, {}),
-      vim.o.filetype,
-      function(swapped_lines)
-        local positions = vim
-          .iter(results)
-          :map(function(res)
-            return res.result
-          end)
-          :flatten()
-          :map(function(location)
-            return reference_position_to_position(location)
-          end)
-          :totable()
-
-        update_at_positions(positions, swapped_lines)
-      end
-    )
+    change_function_internal(bufnr, cursor_pos, positions)
   end)
 end
 

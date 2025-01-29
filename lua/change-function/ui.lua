@@ -42,7 +42,7 @@ local function update_lines(bufnr, lines, filetype, num_lines_update)
   end
 end
 
-local function move(bufnr, lines, max_col, offset)
+local function move(bufnr, lines, max_col, offset, filetype)
   local row, col = unpack(vim.api.nvim_win_get_cursor(0))
 
   if row == max_col then
@@ -55,7 +55,7 @@ local function move(bufnr, lines, max_col, offset)
 
   vim.api.nvim_win_set_cursor(0, { row + offset, col })
 
-  update_lines(bufnr, lines)
+  update_lines(bufnr, lines, filetype)
 end
 
 function M.set_config(config_manager)
@@ -105,7 +105,7 @@ function M.open_ui(changes, node_name, filetype, handler)
       end
     end
 
-    update_lines(popup.bufnr, changes, previous_num_lines)
+    update_lines(popup.bufnr, changes, filetype, previous_num_lines)
   end)
 
   add_mapping(popup, M.config.mappings.add_argument, function()
@@ -125,18 +125,18 @@ function M.open_ui(changes, node_name, filetype, handler)
             id = -1,
           })
 
-          update_lines(popup.bufnr, changes)
+          update_lines(popup.bufnr, changes, filetype)
         end
       end)
     end)
   end)
 
   add_mapping(popup, M.config.mappings.move_up, function()
-    move(popup.bufnr, changes, 1, -1)
+    move(popup.bufnr, changes, 1, -1, filetype)
   end)
 
   add_mapping(popup, M.config.mappings.move_down, function()
-    move(popup.bufnr, changes, #changes, 1)
+    move(popup.bufnr, changes, #changes, 1, filetype)
   end)
 
   add_mapping(popup, M.config.mappings.quit, function()
