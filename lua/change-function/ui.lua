@@ -1,6 +1,8 @@
 local Popup = require("nui.popup")
 local event = require("nui.utils.autocmd").event
 
+local ChangeFlag = require("change-function.utils").ChangeFlag
+
 local M = {}
 
 ---Update the line for the UI
@@ -23,7 +25,8 @@ local function update_lines(bufnr, lines, filetype, num_lines_update)
       if new_line_char == nil then
         new_line_char = 0
       end
-      if i.is_deletion then
+      if i.flag == ChangeFlag.DELETION then
+        -- FIXME: This should be virtual text rather than in the buffer.
         return i.display_line:sub(1, new_line_char - 1) .. " [Marked for deletion]"
       else
         return i.display_line:sub(1, new_line_char - 1)
@@ -94,15 +97,11 @@ function M.open_ui(changes, node_name, filetype, handler)
     local row, _ = unpack(vim.api.nvim_win_get_cursor(0))
     local previous_num_lines = #changes
 
-    -- FIXME: All argument params should have a deleted field.
-    if changes[row].is_addition then
+    if changes[row].flag == ChangeFlag.ADDITION then
       table.remove(changes, row)
     else
-      if changes[row].is_deletion == nil then
-        changes[row].is_deletion = true
-      else
-        changes[row].is_deletion = not changes[row].is_deletion
-      end
+      -- FIXME: This can be a source of problems, NORMAL has a falsy value
+      changes[row].flag = changes[row].flag == ChangeFlag.NORMAL and ChangeFlag.DELETION or ChangeFlag.NORMAL
     end
 
     update_lines(popup.bufnr, changes, filetype, previous_num_lines)
@@ -120,8 +119,7 @@ function M.open_ui(changes, node_name, filetype, handler)
             display_line = signature,
             declaration = signature,
             default_call = default_value,
-            is_addition = true,
-            is_deletion = false,
+            flag = ChangeFlag.ADDITION,
             id = -1,
           })
 

@@ -16,8 +16,7 @@
 ---@field default_call string? If this is an addition, what should the default call value be called
 ---@field declaration string? If this is an addition, what should the declaration be called
 ---@field id string The index of this particular argument in all the arguments (before swapping)
----@field is_addition boolean
----@field is_deletion boolean
+---@field flag integer
 
 local ui = require("change-function.ui")
 local config_manager = require("change-function.config")
@@ -29,6 +28,8 @@ local reference_position_to_position = utils.reference_position_to_position
 local inside_range = utils.inside_range
 local range_text = utils.range_text
 local convert_win_cursor_to_position = utils.convert_win_cursor_to_position
+
+local ChangeFlag = utils.ChangeFlag
 
 local M = {}
 
@@ -268,13 +269,13 @@ local function get_text_edits(position, changes)
   local args = signature_info.arguments
 
   local new_args = vim.tbl_filter(function(change)
-    return not change.is_deletion
+    return change.flag ~= ChangeFlag.DELETION
   end, changes)
 
   local num_deletions = #changes - #new_args
 
   local num_additions = #vim.tbl_filter(function(e)
-    return e.is_addition
+    return e.flag == ChangeFlag.ADDITION
   end, new_args)
 
   local text_edits = {}
@@ -294,7 +295,7 @@ local function get_text_edits(position, changes)
         return
       end
       local text
-      if v.is_addition then
+      if v.flag == ChangeFlag.ADDITION then
         if signature_info.is_call then
           text = v.default_call or v.display_line
         else
@@ -418,8 +419,7 @@ local function change_function_internal(bufnr, location, positions)
     return {
       display_line = i.text,
       id = index,
-      is_deletion = false,
-      is_addition = false,
+      flag = ChangeFlag.NORMAL,
     }
   end, arguments)
 
