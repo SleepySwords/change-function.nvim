@@ -313,17 +313,17 @@ local function get_text_edits(position, changes)
       else
         text = args[v.id].text
       end
-      local argument_seperator = get_argument_seperator(position.bufnr)
-      if argument_seperator == nil then
-        print_error(
-          string.format(
-            "Cannot add an argument as there is no argument seperator for the language %s",
-            vim.bo[position.bufnr].filetype
-          )
-        )
-        return
-      end
       if #args < i then
+        local argument_seperator = get_argument_seperator(position.bufnr)
+        if argument_seperator == nil then
+          print_error(
+            string.format(
+              "Cannot add an argument as there is no argument seperator for the language %s",
+              vim.bo[position.bufnr].filetype
+            )
+          )
+          return
+        end
         to_add = to_add .. argument_seperator .. text
       else
         table.insert(text_edits, {

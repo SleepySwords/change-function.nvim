@@ -100,7 +100,7 @@ function M.open_ui(changes, node_name, filetype, handler)
     if changes[row].flag == ChangeFlag.ADDITION then
       table.remove(changes, row)
     else
-      -- FIXME: This can be a source of problems, NORMAL has a falsy value
+      -- NOTE: This can be a source of problems, NORMAL has a falsy value
       changes[row].flag = changes[row].flag == ChangeFlag.NORMAL and ChangeFlag.DELETION or ChangeFlag.NORMAL
     end
 
