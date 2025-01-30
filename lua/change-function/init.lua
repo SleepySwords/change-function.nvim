@@ -230,7 +230,7 @@ local function get_signature_info(node, bufnr, position)
     end, arguments)
   end
 
-  table.sort(arguments, function (a, b)
+  table.sort(arguments, function(a, b)
     if a.range.start.line == b.range.start.line then
       return a.range.start.character < b.range.start.character
     else

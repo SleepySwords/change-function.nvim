@@ -48,6 +48,9 @@ local defaults = {
       different_argument = false,
     },
     cpp = "function_params",
+    zig = {
+      argument_seperator = ", ",
+    },
   },
 
   nui = function(node_name)
