@@ -142,6 +142,7 @@ local function get_arguments(node, bufnr, position)
 
   local arguments = {}
   local ignore = {}
+  -- NOTE: Maybe figure out a better way to find the order rather than comparing lines ranges
   for _, match, _ in
     query_function:iter_matches(
       node,
@@ -190,6 +191,14 @@ local function get_arguments(node, bufnr, position)
       return not vim.deep_equal(i.range, v)
     end, arguments)
   end
+
+  table.sort(arguments, function (a, b)
+    if a.range.start.line == b.range.start.line then
+      return a.range.start.character < b.range.start.character
+    else
+      return a.range.start.line < b.range.start.line
+    end
+  end)
 
   return arguments
 end
