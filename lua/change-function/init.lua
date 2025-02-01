@@ -142,6 +142,7 @@ end
 
 ---@class SignatureInfo
 ---@field arguments {range: TextRange, text: string}[] The arguments and the text of those arguments
+---@field insertion_point? {line: integer, character: integer} The place to insert the first argument (if it exists).
 ---@field is_call boolean Whether or not this signature is a function call or a function signature
 
 ---Get the parameters/arguments from the function signature.
@@ -176,6 +177,7 @@ local function get_signature_info(node, bufnr, position)
   local is_call = true
   local arguments = {}
   local ignore = {}
+  local first_argument = nil
   -- NOTE: Maybe figure out a better way to find the order rather than comparing lines ranges
   for _, match, _ in
     query_function:iter_matches(
@@ -220,6 +222,11 @@ local function get_signature_info(node, bufnr, position)
         if capture_name == "parameter.inner.ignore" then
           table.insert(ignore, range)
         end
+
+        if capture_name == "insert_first_arg" then
+          vim.print(range)
+          first_argument = range.start
+        end
       end
     end
   end
@@ -241,6 +248,7 @@ local function get_signature_info(node, bufnr, position)
   return {
     arguments = arguments,
     is_call = is_call,
+    insertion_point = first_argument,
   }
 end
 
@@ -328,7 +336,7 @@ local function get_text_edits(position, changes)
       else
         table.insert(text_edits, {
           newText = text,
-          range = args[i].range,
+          range = args[i].range["start"],
         })
       end
     end
@@ -351,11 +359,25 @@ local function get_text_edits(position, changes)
     })
   else
     if #args == 0 then
-      -- FIXME: There is no parantheses match so we cannot get the start of an argument..
-      print_error(
-        "For technical reasons, change function requires at least one argument"
-      )
-      return text_edits
+      -- FIXME: There is no parantheses match so we cannot get the start of an argument.
+      -- The parantheses also does not get the inner token :(
+      if signature_info.insertion_point ~= nil then
+        -- NOTE: argument seperator must be not null as we already added it.
+        local argument_seperator = get_argument_seperator(position.bufnr)
+        table.insert(text_edits, {
+          newText = to_add:sub(#argument_seperator + 1),
+          range = {
+            start = signature_info.insertion_point,
+            ["end"] = signature_info.insertion_point,
+          },
+        })
+        return text_edits
+      else
+        print_error(
+          "The first argument cannot be found, ensure the `first_arg` capture has been set."
+        )
+        return text_edits
+      end
     end
     table.insert(text_edits, {
       newText = to_add,
@@ -401,6 +423,7 @@ local function update_at_positions(positions, changes)
   end
 
   for k, v in pairs(global_text_edits) do
+    vim.print(k, v)
     vim.lsp.util.apply_text_edits(v, k, "utf-16")
   end
 end
