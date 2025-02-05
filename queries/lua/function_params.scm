@@ -1,36 +1,33 @@
 (function_call
-  name: (identifier) @function_name
   (arguments
     (_)? @parameter.inner
-    ")" @insert_first_arg
+    ")" @parameter.initial_insertion
   )
-) @method.outer
+) @call.outer
+
+(function_call
+  name: (identifier) @function_name
+)
 
 (function_call
   name: (_
     field: (identifier) @function_name
   )
-  (arguments
+)
+
+(function_declaration
+  parameters: (parameters
     (_)? @parameter.inner
-    ")" @insert_first_arg
+    ")" @parameter.initial_insertion
   )
-) @method.outer
+) @function.outer
 
 (function_declaration
   name: (identifier) @function_name
-  parameters: (parameters
-      (_)? @parameter.inner
-      ")" @insert_first_arg
-    )
-  ) @function.outer
+)
 
-; Investigate why * does not work.
 (function_declaration
   name: (_
     field: (identifier) @function_name
   )
-  parameters: (parameters
-      (_)? @parameter.inner
-      ")" @insert_first_arg
-    )
-  ) @function.outer
+)

@@ -23,7 +23,6 @@ local _ = require("nui.popup")
 
 ---@class LanguageOptions
 ---@field query_file string
----@field different_argument boolean
 ---@field argument_seperator? string
 
 ---@class ChangeFunctionUiConfig
@@ -39,16 +38,18 @@ local defaults = {
   languages = {
     rust = {
       query_file = "function_params",
-      different_argument = false,
       argument_seperator = ", ",
     },
     lua = {
       query_file = "function_params",
       argument_seperator = ", ",
-      different_argument = false,
     },
-    cpp = "function_params",
+    cpp = {
+      query_file = "function_params",
+      argument_seperator = ", ",
+    },
     zig = {
+      query_file = "textobjects",
       argument_seperator = ", ",
     },
   },

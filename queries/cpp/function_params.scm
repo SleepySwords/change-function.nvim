@@ -1,45 +1,52 @@
 (function_declarator
   declarator: (identifier) @function_name
   parameters: (parameter_list
+    "(" @function_name
     (_) @parameter.inner
   )
-)
+) @function.outer
+
 (function_declarator
   declarator: (field_identifier)  @function_name
   parameters: (parameter_list
+    "(" @function_name
   (_) @parameter.inner
   )
-)
+) @function.outer
 
 (call_expression
   function: (identifier) @function_name
   arguments: (argument_list
+    "(" @function_name
     (_) @parameter.inner
   )
-)
+) @call.outer
 
 (call_expression
   function: (field_expression
     field: (field_identifier) @function_name
   )
   arguments: (argument_list
+    "(" @function_name
     (_) @parameter.inner
   )
-)
+) @call.outer
 
 
 (init_declarator
 declarator: (identifier) @function_name
 value: (argument_list
+    "(" @function_name
 (_) @parameter.inner
-))
+)) @call.outer
 
 (new_expression
   type: (type_identifier) @function_name
   arguments: (argument_list
+    "(" @function_name
     (_) @parameter.inner
   )
-)
+) @call.outer
 
 (function_declarator
   declarator: (qualified_identifier
@@ -48,4 +55,4 @@ value: (argument_list
   parameters: (parameter_list
     (_) @parameter.inner
   )
-)
+) @function.outer

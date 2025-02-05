@@ -198,21 +198,6 @@ local function get_signature_info(node, bufnr, position)
           is_call = false
         end
 
-        if
-          (IDENTIFYING_CAPTURES[capture_name] ~= nil)
-          and not inside_range(range, position)
-        then
-          print_error(
-            string.format(
-              "Could not find a function at (%d, %d) in the file %s",
-              (position[1] + 1),
-              (position[2] + 1),
-              vim.api.nvim_buf_get_name(bufnr)
-            )
-          )
-          return
-        end
-
         if ARGUMENT_CAPTURES[capture_name] ~= nil then
           table.insert(arguments, {
             range = range,
@@ -223,7 +208,7 @@ local function get_signature_info(node, bufnr, position)
           table.insert(ignore, range)
         end
 
-        if capture_name == "insert_first_arg" then
+        if capture_name == "parameter.initial_insertion" then
           vim.print(range)
           first_argument = range.start
         end
@@ -336,7 +321,7 @@ local function get_text_edits(position, changes)
       else
         table.insert(text_edits, {
           newText = text,
-          range = args[i].range["start"],
+          range = args[i].range,
         })
       end
     end
