@@ -19,8 +19,6 @@ local _ = require("nui.popup")
 ---@field mappings? Mappings
 ---@field quickfix_source? "entry" | "cursor"
 
--- FIXME: This is a very long name
-
 ---@class LanguageOptions
 ---@field query_file string
 ---@field argument_seperator? string

@@ -5,6 +5,8 @@ local ChangeFlag = require("change-function.utils").ChangeFlag
 
 local M = {}
 
+local change_function_id = vim.api.nvim_create_namespace("change_function.extmarks")
+
 ---Update the line for the UI
 ---@param bufnr number The buffer to update the UI.
 ---@param lines Change[] The lines to print.
@@ -15,31 +17,47 @@ local function update_lines(bufnr, lines, filetype, num_lines_update)
   end
 
   vim.api.nvim_set_option_value("modifiable", true, { buf = bufnr })
+  vim.api.nvim_buf_clear_namespace(bufnr, change_function_id, 0, -1)
+
+  local new_lines = {}
+
+  for r, i in ipairs(lines) do
+    local new_line_char = string.find(i.display_line, "\n")
+    if new_line_char == nil then
+      new_line_char = 0
+    end
+    if i.flag == ChangeFlag.DELETION then
+      vim.schedule(function()
+        vim.api.nvim_buf_set_extmark(
+          bufnr,
+          change_function_id,
+          r - 1,
+          0,
+          {
+            virt_text = { { "[Marked for deletion]" } },
+            virt_text_pos = "eol",
+          }
+        )
+      end)
+    end
+    table.insert(new_lines, i.display_line:sub(1, new_line_char - 1))
+  end
+
   vim.api.nvim_buf_set_lines(
     bufnr,
     0,
     num_lines_update,
     false,
-    vim.tbl_map(function(i)
-      local new_line_char = string.find(i.display_line, "\n")
-      if new_line_char == nil then
-        new_line_char = 0
-      end
-      if i.flag == ChangeFlag.DELETION then
-        -- FIXME: This should be virtual text rather than in the buffer.
-        return i.display_line:sub(1, new_line_char - 1) .. " [Marked for deletion]"
-      else
-        return i.display_line:sub(1, new_line_char - 1)
-      end
-    end, lines)
+    new_lines
   )
   vim.api.nvim_set_option_value("modifiable", false, { buf = bufnr })
 
   local disable_syntax_highlight = M.config.ui.disable_syntax_highlight
 
-  if type(disable_syntax_highlight) == 'table'
+  if
+    type(disable_syntax_highlight) == "table"
       and not vim.list_contains(disable_syntax_highlight, filetype)
-      or not disable_syntax_highlight
+    or not disable_syntax_highlight
   then
     vim.o.filetype = filetype
   end
@@ -101,7 +119,9 @@ function M.open_ui(changes, node_name, filetype, handler)
       table.remove(changes, row)
     else
       -- NOTE: This can be a source of problems, NORMAL has a falsy value
-      changes[row].flag = changes[row].flag == ChangeFlag.NORMAL and ChangeFlag.DELETION or ChangeFlag.NORMAL
+      changes[row].flag = changes[row].flag == ChangeFlag.NORMAL
+          and ChangeFlag.DELETION
+        or ChangeFlag.NORMAL
     end
 
     update_lines(popup.bufnr, changes, filetype, previous_num_lines)

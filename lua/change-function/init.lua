@@ -33,8 +33,13 @@ local ChangeFlag = utils.ChangeFlag
 
 local M = {}
 
+-- FIXME: Arguments that do not match size fail spectacularly. `update_lines` for example
+-- both ways, call and declaration
+
 IDENTIFYING_CAPTURES = { ["function_name"] = true, ["method_name"] = true }
 ARGUMENT_CAPTURES = { ["parameter.inner"] = true, ["argument.inner"] = true }
+
+PARAMETER_INITAL_INSERTION = "parameter.initial_insertion"
 
 ---Gets the current query from the
 ---@param bufnr? integer The buffer to get the query from
@@ -208,7 +213,7 @@ local function get_signature_info(node, bufnr, position)
           table.insert(ignore, range)
         end
 
-        if capture_name == "parameter.initial_insertion" then
+        if capture_name == PARAMETER_INITAL_INSERTION then
           vim.print(range)
           first_argument = range.start
         end
@@ -270,6 +275,7 @@ local function get_text_edits(position, changes)
 
   local args = signature_info.arguments
 
+  -- FIXME: num_deletions and num_additions does not take args length into consideration.
   local new_args = vim.tbl_filter(function(change)
     return change.flag ~= ChangeFlag.DELETION
   end, changes)
@@ -282,6 +288,7 @@ local function get_text_edits(position, changes)
 
   local text_edits = {}
   local to_add = ""
+  -- FIXME: loops through new_args so any previous arguments will be discarded.
   for i, v in ipairs(new_args) do
     -- Don't include textedits that dot not change anything.
     if i ~= v.id then
@@ -344,8 +351,6 @@ local function get_text_edits(position, changes)
     })
   else
     if #args == 0 then
-      -- FIXME: There is no parantheses match so we cannot get the start of an argument.
-      -- The parantheses also does not get the inner token :(
       if signature_info.insertion_point ~= nil then
         -- NOTE: argument seperator must be not null as we already added it.
         local argument_seperator = get_argument_seperator(position.bufnr)
@@ -359,7 +364,9 @@ local function get_text_edits(position, changes)
         return text_edits
       else
         print_error(
-          "The first argument cannot be found, ensure the `first_arg` capture has been set."
+          "The place for the first argument cannot be found, ensure the `"
+            .. PARAMETER_INITAL_INSERTION
+            .. "` capture has been set."
         )
         return text_edits
       end
