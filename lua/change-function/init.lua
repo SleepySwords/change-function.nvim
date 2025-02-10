@@ -214,7 +214,6 @@ local function get_signature_info(node, bufnr, position)
         end
 
         if capture_name == PARAMETER_INITAL_INSERTION then
-          vim.print(range)
           first_argument = range.start
         end
       end
@@ -275,73 +274,107 @@ local function get_text_edits(position, changes)
 
   local args = signature_info.arguments
 
-  -- FIXME: num_deletions and num_additions does not take args length into consideration.
-  local new_args = vim.tbl_filter(function(change)
-    return change.flag ~= ChangeFlag.DELETION
-  end, changes)
+  local existing_ranges = vim.tbl_map(function(arg)
+    return arg.range
+  end, args)
 
-  local num_deletions = #changes - #new_args
+  -- NOTE: We currently have a number of argument positions that we can currently use.
+  -- f(_, _, _), 3 functions that can be used here.
+
+  -- FIXME: num_deletions and num_additions does not take args length into consideration.
+  local num_deletions = #vim.tbl_filter(function(change)
+    return change.flag == ChangeFlag.DELETION
+  end, changes)
 
   local num_additions = #vim.tbl_filter(function(e)
     return e.flag == ChangeFlag.ADDITION
-  end, new_args)
+  end, changes)
 
-  local text_edits = {}
-  local to_add = ""
-  -- FIXME: loops through new_args so any previous arguments will be discarded.
-  for i, v in ipairs(new_args) do
-    -- Don't include textedits that dot not change anything.
-    if i ~= v.id then
-      if #args < v.id then
-        print_error(
-          string.format(
-            "Swapped argument does not exist at (%d, %d) in %s",
-            pos[1] + 1,
-            pos[2] + 1,
-            vim.api.nvim_buf_get_name(position.bufnr)
-          )
-        )
-        return
-      end
-      local text
-      if v.flag == ChangeFlag.ADDITION then
-        if signature_info.is_call then
-          text = v.default_call or v.display_line
-        else
-          text = v.declaration or v.display_line
-        end
-      else
-        text = args[v.id].text
-      end
-      if #args < i then
-        local argument_seperator = get_argument_seperator(position.bufnr)
-        if argument_seperator == nil then
+  local argument_difference = num_additions - num_deletions
+
+  local args_length = #args + argument_difference
+
+  local current_arg = 1
+
+  local function get_text(index)
+    local v = changes[index]
+
+    if v ~= nil then
+      if i ~= v.id then
+        if #args < v.id then
           print_error(
             string.format(
-              "Cannot add an argument as there is no argument seperator for the language %s",
-              vim.bo[position.bufnr].filetype
+              "Swapped argument does not exist at (%d, %d) in %s",
+              pos[1] + 1,
+              pos[2] + 1,
+              vim.api.nvim_buf_get_name(position.bufnr)
             )
           )
           return
         end
-        to_add = to_add .. argument_seperator .. text
-      else
-        table.insert(text_edits, {
-          newText = text,
-          range = args[i].range,
-        })
+        local text
+        if v.flag == ChangeFlag.ADDITION then
+          if signature_info.is_call then
+            text = v.default_call or v.display_line
+          else
+            text = v.declaration or v.display_line
+          end
+        else
+          text = args[v.id].text
+        end
+        return text
+      end
+    else
+      if num_deletions > 0 or num_additions > 0 then
+        -- NOTE: the current_arg is only changed by the num_additions,
+        -- num_deletions does not change the pointer of the current_arg
+        -- (as it previously existed in the signature)
+        return args[index - num_additions].text
       end
     end
   end
 
-  if num_deletions > num_additions then
-    local deletion_range = ((num_deletions - num_additions) >= #args)
+  local text_edits = {}
+  -- FIXME: loops through new_args so any previous arguments will be discarded.
+  -- needs to loop (#args - num_deletions + num_additions) times.
+  for i, a in ipairs(existing_ranges) do
+    -- Don't include textedits that dot not change anything.
+    if i > args_length then
+      break
+    end
+
+    while
+      current_arg <= #changes
+      and changes[current_arg].flag == ChangeFlag.DELETION
+    do
+      current_arg = current_arg + 1
+    end
+
+    local text = get_text(current_arg)
+    if text ~= nil then
+      table.insert(text_edits, {
+        newText = text,
+        range = a,
+      })
+    else
+      vim.print("?")
+    end
+
+    current_arg = current_arg + 1
+  end
+
+  if argument_difference == 0 then
+    return text_edits
+  end
+
+  if argument_difference < 0 then
+    local deletion_range = (-argument_difference >= #args)
         and {
           start = args[1].range["start"],
           ["end"] = args[#args].range["end"],
         }
       or {
-        start = args[#args - (num_deletions - num_additions)].range["end"],
+        start = args[#args + argument_difference].range["end"],
         ["end"] = args[#args].range["end"],
       }
 
@@ -349,34 +382,51 @@ local function get_text_edits(position, changes)
       newText = "",
       range = deletion_range,
     })
-  else
+  end
+
+  if argument_difference > 0 then
+    local addition = ""
+    local argument_seperator = get_argument_seperator(position.bufnr)
+    if argument_seperator == nil then
+      print_error(
+        string.format(
+          "Cannot add an argument as there is no argument seperator for the language %s",
+          vim.bo[position.bufnr].filetype
+        )
+      )
+      return
+    end
+
+    for i = 1, argument_difference do
+      local text = get_text(current_arg + i - 1)
+      vim.print(text)
+      addition = addition .. argument_seperator .. text
+    end
+
+    local range
     if #args == 0 then
-      if signature_info.insertion_point ~= nil then
-        -- NOTE: argument seperator must be not null as we already added it.
-        local argument_seperator = get_argument_seperator(position.bufnr)
-        table.insert(text_edits, {
-          newText = to_add:sub(#argument_seperator + 1),
-          range = {
-            start = signature_info.insertion_point,
-            ["end"] = signature_info.insertion_point,
-          },
-        })
-        return text_edits
-      else
+      addition = addition:sub(#argument_seperator + 1)
+      if signature_info.insertion_point == nil then
         print_error(
           "The place for the first argument cannot be found, ensure the `"
             .. PARAMETER_INITAL_INSERTION
             .. "` capture has been set."
         )
-        return text_edits
+        return -- FIXME: maybe should return current text edits?
       end
-    end
-    table.insert(text_edits, {
-      newText = to_add,
+      range = {
+        start = signature_info.insertion_point,
+        ["end"] = signature_info.insertion_point,
+      }
+    else
       range = {
         start = args[#args].range["end"],
         ["end"] = args[#args].range["end"],
-      },
+      }
+    end
+    table.insert(text_edits, {
+      newText = addition,
+      range = range,
     })
   end
 
@@ -415,7 +465,6 @@ local function update_at_positions(positions, changes)
   end
 
   for k, v in pairs(global_text_edits) do
-    vim.print(k, v)
     vim.lsp.util.apply_text_edits(v, k, "utf-16")
   end
 end
