@@ -300,8 +300,8 @@ local function get_text_edits(position, changes)
     local v = changes[index]
 
     if v ~= nil then
-      if i ~= v.id then
-        if #args < v.id then
+      if v.flag ~= ChangeFlag.NORMAL or i ~= v.id then
+        if v.flag == ChangeFlag.NORMAL and #args < v.id then
           print_error(
             string.format(
               "Swapped argument does not exist at (%d, %d) in %s",
