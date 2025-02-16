@@ -274,16 +274,16 @@ local function get_text_edits(position, changes)
 
   local args = signature_info.arguments
 
+  -- NOTE: All the existing function argument ranges so they can be used to swap
+  -- and we do not have to rebuild the entire argument ranges.
   local existing_ranges = vim.tbl_map(function(arg)
     return arg.range
   end, args)
 
-  -- NOTE: We currently have a number of argument positions that we can currently use.
-  -- f(_, _, _), 3 functions that can be used here.
-
-  -- FIXME: num_deletions and num_additions does not take args length into consideration.
+  -- NOTE: `change.id <= #args` is to check if the deleted argument is in this signature,
+  -- if not we cannot count it.
   local num_deletions = #vim.tbl_filter(function(change)
-    return change.flag == ChangeFlag.DELETION
+    return change.flag == ChangeFlag.DELETION and change.id <= #args
   end, changes)
 
   local num_additions = #vim.tbl_filter(function(e)
@@ -335,10 +335,8 @@ local function get_text_edits(position, changes)
   end
 
   local text_edits = {}
-  -- FIXME: loops through new_args so any previous arguments will be discarded.
-  -- needs to loop (#args - num_deletions + num_additions) times.
   for i, a in ipairs(existing_ranges) do
-    -- Don't include textedits that dot not change anything.
+    -- NOTE: Don't include textedits that do not change anything.
     if i > args_length then
       break
     end
@@ -357,7 +355,7 @@ local function get_text_edits(position, changes)
         range = a,
       })
     else
-      vim.print("?")
+      return
     end
 
     current_arg = current_arg + 1
@@ -399,7 +397,9 @@ local function get_text_edits(position, changes)
 
     for i = 1, argument_difference do
       local text = get_text(current_arg + i - 1)
-      vim.print(text)
+      if text == nil then
+        return
+      end
       addition = addition .. argument_seperator .. text
     end
 
@@ -412,7 +412,7 @@ local function get_text_edits(position, changes)
             .. PARAMETER_INITAL_INSERTION
             .. "` capture has been set."
         )
-        return -- FIXME: maybe should return current text edits?
+        return
       end
       range = {
         start = signature_info.insertion_point,
