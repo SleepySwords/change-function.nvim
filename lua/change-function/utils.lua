@@ -1,5 +1,14 @@
 local M = {}
 
+---@class ChangeFlag
+local ChangeFlag = {
+  NORMAL = 0,
+  ADDITION = 1,
+  DELETION = 2,
+}
+
+M.ChangeFlag = ChangeFlag
+
 ---Converts a position from the reference result and return a new position
 ---@param position {}
 ---@return Position

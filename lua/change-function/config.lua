@@ -1,16 +1,16 @@
+local _ = require("nui.popup")
+
 ---@class Mappings
----@field quit? string
----@field quit2? string
----@field move_down? string
----@field move_up? string
----@field confirm? string
+---@field quit? string | string[]
+---@field move_down? string | string[]
+---@field move_up? string | string[]
+---@field confirm? string | string[]
 
 ---@class InternalMappings
----@field quit string
----@field quit2 string
----@field move_down string
----@field move_up string
----@field confirm string
+---@field quit string | string[]
+---@field move_down string | string[]
+---@field move_up string | string[]
+---@field confirm string | string[]
 
 ---@class ChangeFunctionConfig
 ---@field queries? table<string, string>
@@ -19,20 +19,37 @@
 ---@field mappings? Mappings
 ---@field quickfix_source? "entry" | "cursor"
 
+---@class LanguageOptions
+---@field query_file string
+---@field argument_seperator? string
+
 ---@class ChangeFunctionUiConfig
 ---@field disable_syntax_highlight string[] | boolean Table of filetypes to not syntax highlight. If `true`, disable syntax highlighting all filetypes. If `false`, enable syntax highlighting for all.
 
 ---@class InternalChangeFunctionConfig
----@field queries table<string, string>
+---@field languages table<string, string | LanguageOptions>
 ---@field nui fun (node_name: string): NuiPopup
 ---@field ui ChangeFunctionUiConfig
 ---@field mappings Mappings
 ---@field quickfix_source "entry" | "cursor"
 local defaults = {
-  queries = {
-    rust = "function_params",
-    lua = "function_params",
-    cpp = "function_params",
+  languages = {
+    rust = {
+      query_file = "function_params",
+      argument_seperator = ", ",
+    },
+    lua = {
+      query_file = "function_params",
+      argument_seperator = ", ",
+    },
+    cpp = {
+      query_file = "function_params",
+      argument_seperator = ", ",
+    },
+    zig = {
+      query_file = "textobjects",
+      argument_seperator = ", ",
+    },
   },
 
   nui = function(node_name)
@@ -40,6 +57,7 @@ local defaults = {
       enter = true,
       focusable = true,
       relative = "win",
+      zindex = 50,
       border = {
         style = "rounded",
         text = {
@@ -65,11 +83,12 @@ local defaults = {
   quickfix_source = "entry",
 
   mappings = {
-    quit = "q",
-    quit2 = "<esc>",
+    quit = { "q", "<Esc>" },
     move_down = "<S-j>",
     move_up = "<S-k>",
     confirm = "<enter>",
+    delete_argument = "x",
+    add_argument = "i",
   },
 }
 
