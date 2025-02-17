@@ -52,10 +52,9 @@ local function update_lines(bufnr, lines, filetype, num_lines_update)
 
   local disable_syntax_highlight = M.config.ui.disable_syntax_highlight
 
-  if
-    type(disable_syntax_highlight) == "table"
+  if type(disable_syntax_highlight) == "table"
       and not vim.list_contains(disable_syntax_highlight, filetype)
-    or not disable_syntax_highlight
+      or not disable_syntax_highlight
   then
     vim.o.filetype = filetype
   end
