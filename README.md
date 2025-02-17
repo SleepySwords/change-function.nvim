@@ -116,7 +116,7 @@ vim.api.nvim_set_keymap('n', '<leader>crq', '', {
   callback = change_function.change_function_via_qf,
 })
 ```
-[Writing queries for different languages](/docs/query_creation.md)
+## [Writing queries for different languages](/docs/query_creation.md)
 
 ## Todo
 - [x] Make a nicer UI with nui
