@@ -5,7 +5,8 @@ local ChangeFlag = require("change-function.utils").ChangeFlag
 
 local M = {}
 
-local change_function_id = vim.api.nvim_create_namespace("change_function.extmarks")
+local change_function_id =
+  vim.api.nvim_create_namespace("change_function.extmarks")
 
 ---Update the line for the UI
 ---@param bufnr number The buffer to update the UI.
@@ -26,30 +27,27 @@ local function update_lines(bufnr, lines, filetype, num_lines_update)
     if new_line_char == nil then
       new_line_char = 0
     end
-    if i.flag == ChangeFlag.DELETION then
-      vim.schedule(function()
-        vim.api.nvim_buf_set_extmark(
-          bufnr,
-          change_function_id,
-          r - 1,
-          0,
-          {
-            virt_text = { { "[Marked for deletion]" } },
-            virt_text_pos = "eol",
-          }
-        )
-      end)
-    end
+    vim.schedule(function()
+      if i.flag == ChangeFlag.DELETION then
+        vim.api.nvim_buf_set_extmark(bufnr, change_function_id, r - 1, 0, {
+          virt_text = { { "[Marked for deletion]", "comment" } },
+          virt_text_pos = "eol",
+        })
+      elseif i.flag == ChangeFlag.ADDITION then
+        vim.api.nvim_buf_set_extmark(bufnr, change_function_id, r - 1, 0, {
+          virt_text = {
+            { "(Default argument: ", "comment" },
+            { i.default_call, "comment" },
+            { ")", "comment" },
+          },
+          virt_text_pos = "eol",
+        })
+      end
+    end)
     table.insert(new_lines, i.display_line:sub(1, new_line_char - 1))
   end
 
-  vim.api.nvim_buf_set_lines(
-    bufnr,
-    0,
-    num_lines_update,
-    false,
-    new_lines
-  )
+  vim.api.nvim_buf_set_lines(bufnr, 0, num_lines_update, false, new_lines)
   vim.api.nvim_set_option_value("modifiable", false, { buf = bufnr })
 
   local disable_syntax_highlight = M.config.ui.disable_syntax_highlight
