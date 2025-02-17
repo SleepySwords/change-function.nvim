@@ -33,9 +33,6 @@ local ChangeFlag = utils.ChangeFlag
 
 local M = {}
 
--- FIXME: Arguments that do not match size fail spectacularly. `update_lines` for example
--- both ways, call and declaration
-
 IDENTIFYING_CAPTURES = { ["function_name"] = true, ["method_name"] = true }
 ARGUMENT_CAPTURES = { ["parameter.inner"] = true, ["argument.inner"] = true }
 

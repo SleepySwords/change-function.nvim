@@ -38,6 +38,7 @@ quick way to change function arguments, but sacrifices flexibility.
    reorganisation window.
 2. Swap whatever arguments you need using the specified mappings.
 3. Press enter and confirm
+
 ### Using the quickfix list.
 
 1. Add your references using a command, for example
@@ -60,15 +61,24 @@ local change_function = require('change-function')
 
 -- Default options
 change_function.setup({
+  languages = {
+    rust = {
+      query_file = "function_params",
+      argument_seperator = ", ",
+    },
+  },
+
   nui = function(node_name)
     return {
       enter = true,
       focusable = true,
+      relative = "win",
+      zindex = 50,
       border = {
         style = "rounded",
         text = {
           top = "Changing argument of " .. node_name,
-        }
+        },
       },
       position = "50%",
       size = {
@@ -82,20 +92,20 @@ change_function.setup({
     }
   end,
 
-  queries = {
-    rust = "function_params",
-  }
+  ui = {
+    disable_syntax_highlight = false,
+  },
+
+  quickfix_source = "entry",
 
   mappings = {
-    quit = 'q',
-    quit2 = '<esc>',
-    move_down = '<S-j>',
-    move_up = '<S-k>',
-    confirm = '<enter>',
+    quit = { "q", "<Esc>" },
+    move_down = "<S-j>",
+    move_up = "<S-k>",
+    confirm = "<enter>",
+    delete_argument = "x",
+    add_argument = "i",
   },
-  -- Specifies whether or not to use the selected entry as the arguments for the
-  -- swapping window or the function at the cursor.
-  quickfix_source = "entry",
 })
 
 vim.api.nvim_set_keymap('n', '<leader>crl', '', {
@@ -106,112 +116,7 @@ vim.api.nvim_set_keymap('n', '<leader>crq', '', {
   callback = change_function.change_function_via_qf,
 })
 ```
-
-## Writing queries for different languages
-
-`change-function.nvim` uses treesitter to find the location of argument and
-function parameters in order to swap them. By default, `change-function.nvim`
-uses the `textobjects.scm` queries as a way to find the parameters. However,
-sometimes these queries are not suitable, as they do not contain the function
-name captures (we might use the highlights.scm to remedy this in the future),
-but also incorrectly match arguments. Writing queries to match the argument is
-fortunately quite simple.
-
-The queries used are specified in the config for each filetype, typically they
-are named `function_params.scm` files and are individual to each language. These
-files are stored in the runtime `queries` directory, so local configurations are
-also able to add or override them.
-
-### 1. Finding the function calls/declarations
-
-You can use the `:InspectTree` command to see how treesitter parses the
-language. The items we want to find are the all the function declarations and
-function calls. This can be done by having the cursor over a function
-call/declaration and seeing where it lands on the tree.
-
-Usually, they would have a similar name to `function_item` or `call_expression`.
-
-<img width="921" alt="Untitled" src="https://github.com/user-attachments/assets/5dcf0e73-64d7-41f9-99ea-a5d21f6d2559">
-
-### 2. Matching the function arguments/parameters
-
-We want to capture the individual arguments from the query so their ranges can
-be found and swapped. Usually, these arguments are within the
-`arguments`/`parameters` field of the function declaration or call expression.
-To capture the individual arguments we want to append a capture called
-`parameter.inner` (ie: `@parameter.inner`), to the end of the query. As some
-parsers may use the expressions themselves (like: `binary_expression`), a
-placeholder value `(_)` could be used.
-
-Ensure, you place both a function declaration and a call expression if your
-language supports it to update references across your project.
-
-### 3. Matching the function/method names
-
-You may also would want to add captures for identifiers, such as `method_name`
-and `function_name`. This allows for `change-function.nvim` to detect if the
-cursor is currently on top of a method/function name.
-
-
-The process is similar to matching functions arguments/parameters, but instead
-looking and matching for a node that is similar to `identifier`, this can be
-found by looking at the highlighted node when your cursor is on top of a
-function/call name.
-
-
-Currently, there is no difference between how `method_name` and `function_name`
-are handle, but they may be handled differently in the future.
-
-### Match from the root of function declaration/argument
-**NOTE:** When matching function arguments or function names, match them from
-the root of the function declaration/call, as shown below, as to be able to 
-match the identifier as well as the argument.
-
-### Putting this together for Rust
-```query
-; Match function declarations
-(function_item
-    name: (identifier) @function_name
-    parameters: (parameters
-        (parameter) @parameter.inner
-    )
-)
-
-(function_signature_item
-    name: (identifier) @function_name
-    parameters: (parameters
-        (parameter) @parameter.inner
-    )
-)
-
-; Match function calls
-(call_expression
-  function: (field_expression
-    field: (field_identifier) @method_name
-  )
-  arguments: (arguments
-      (_) @parameter.inner
-  )
-)
-
-(call_expression
-  function: (scoped_identifier
-    name: (identifier) @function_name
-  )
-  arguments: (arguments
-      (_) @parameter.inner
-  )
-)
-
-(call_expression
-  function: (identifier) @function_name
-  arguments: (arguments
-      (_) @parameter.inner
-  )
-)
-```
-
-If you have written a nice query, please contribute it here :)
+[Writing queries for different languages](/docs/query_creation.md)
 
 ## Todo
 - [x] Make a nicer UI with nui
